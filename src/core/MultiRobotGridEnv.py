@@ -1,9 +1,12 @@
 import gymnasium as gym
 import numpy as np
+import pygame
 from gymnasium import spaces
 
 from src.agents.delivery_robot import DeliveryRobot
-from src.utils.enums import Task
+from src.agents.depot import Depot
+from src.agents.task import Task
+from src.utils.enums import TaskType
 
 
 class MultiRobotGridEnv(gym.Env):
@@ -13,7 +16,9 @@ class MultiRobotGridEnv(gym.Env):
         num_agents: int = 5,
         agent_view_size: int = 5,
         obstacles: list[tuple[int, int]] | None = None,
-        depot: tuple[int, int] = (0, 0),
+        depots: list[Depot] = [Depot((0, 0))],
+        step_limit: int = 100,
+        task_length: int = 5,
     ):
         super(MultiRobotGridEnv, self).__init__()
         self.grid_width, self.grid_height = grid_size
@@ -27,11 +32,22 @@ class MultiRobotGridEnv(gym.Env):
             obs = np.array(obstacles, dtype=np.uint8)
             self.obstacles[obs[:, 0], obs[:, 1]] = 1
 
-        self.depot = depot
+        self.depots = depots
+        self.step_limit = step_limit
+        self.step_count = 0
+        self.task_length = task_length
 
-        # Akcje: 0=Góra, 1=Dół, 2=Lewo, 3=Prawo, 4=Czekaj
+        # Akcje: 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT, 4=WAIT
         # MultiDiscrete pozwala zdefiniować akcję dla każdego robota naraz
         self.action_space = spaces.MultiDiscrete([5] * num_agents)
+
+        # Visualization
+        self.window_size = 600  # Rozmiar okna w pikselach
+        self.cell_size = self.window_size // max(self.grid_width, self.grid_height)
+        self.window = None
+        self.clock = None
+        pygame.font.init()
+        self.font = pygame.font.SysFont("Arial", 18)
 
         self.observation_space = spaces.Dict(
             {
@@ -51,75 +67,103 @@ class MultiRobotGridEnv(gym.Env):
             }
         )
 
-    def _non_obstacle_cells(self) -> list[tuple[int, int]]:
-        return [
-            (x, y)
-            for x in range(self.grid_width)
-            for y in range(self.grid_height)
-            if self.obstacles[x, y] == 0 and (x, y) != self.depot
-        ]
-        
-    def get_empty_cells(self) -> set[tuple[int, int]]:
-        occupied_cells = set()
+    def _depot_positions(self) -> set[tuple[int, int]]:
+        return {depot.pos for depot in self.depots}
+
+    def _obstacle_cells(self) -> set[tuple[int, int]]:
+        indices = np.argwhere(self.obstacles == 1)
+        return set(map(tuple, indices))
+
+    def get_empty_cells(self, include_depot: bool = False) -> set[tuple[int, int]]:
+        occupied_cells = self._obstacle_cells()
         for agent in self.agents:
             occupied_cells.update(agent.get_occupied_cells())
-        indices = np.argwhere(self.obstacles == 1)
-        occupied_cells.update(map(tuple, indices))
-        occupied_cells.add(self.depot)
-        all_cells = {(x, y) for x in range(self.grid_width) for y in range(self.grid_height)}
+        if include_depot:
+            occupied_cells.update(self._depot_positions())
+        all_cells = {
+            (x, y) for x in range(self.grid_width) for y in range(self.grid_height)
+        }
         empty_cells = all_cells - occupied_cells
         return empty_cells
 
     def reset(self, seed=None, options=None):
+        self.step_count = 0
         super().reset(seed=seed)
-
-        empty_cells = self._non_obstacle_cells()
         self.agents.clear()
+        empty_cells = list(self.get_empty_cells(include_depot=True))
         agent_indices = self.np_random.choice(
             len(empty_cells), size=self.num_agents, replace=False
         )
-        goal_indices = self.np_random.choice(
-            len(empty_cells), size=self.num_agents, replace=True
-        )
+        goals = []
+        for i in range(self.num_agents):
+            goals.append(
+                self.np_random.choice(
+                    len(empty_cells), size=self.task_length, replace=True
+                )
+            )
         observations = {}
 
-        for i, (agent_i, goal_i) in enumerate(zip(agent_indices, goal_indices)):
+        for i, (agent_i, goal_indices) in enumerate(zip(agent_indices, goals)):
             agent_pos = empty_cells[agent_i]
-            goal_pos = empty_cells[goal_i]
-            robot = DeliveryRobot(position=agent_pos, goal=goal_pos, id=i)
+            goal_positions = [empty_cells[goal_i] for goal_i in goal_indices] + [
+                self.depots[0].pos
+            ]
+            task_types = [TaskType.PICKUP] * len(goal_positions) + [TaskType.LEAVE]
+            task = Task(goal_positions, task_types, id=i)
+            robot = DeliveryRobot(
+                position=agent_pos, task=task, depot=self.depots[0], id=i
+            )
             self.agents.add(robot)
-            observations[f"agent_{i}"] = self._get_obs(robot)
+            observations[robot.id] = self._get_obs(robot)
 
         return observations, {}
+
+    def _next_pos(self, agent: DeliveryRobot, action: int) -> tuple[int, int]:
+        dx, dy = 0, 0
+        match action:
+            case 0:  # UP
+                dy = -1
+            case 1:  # RIGHT
+                dx = 1
+            case 2:  # DOWN
+                dy = 1
+            case 3:  # LEFT
+                dx = -1
+        return (agent.pos[0] + dx, agent.pos[1] + dy)
 
     def step(self, actions: dict[int, int]):
         # actions to array np. [akcja_robota_0, akcja_robota_1, ...]
         observations = {}
         rewards = {}
-        terminateds = {"__all__": False}
-        
-        empty_cells = self.get_empty_cells()
-        
+
+        empty_cells = self.get_empty_cells(include_depot=False)
+
         agent_list = list(self.agents)
-        
-        for agent in self.np_random.shuffle(agent_list):
-            # TODO DOKOŃCZYĆ TUTAJ
+        self.np_random.shuffle(agent_list)
 
-        for i, agent in enumerate(sorted(list(self.agents), key=lambda x: x.id)):
-            # 1. Logika ruchu agenta na podstawie actions[i]
-            # 2. Sprawdzenie kolizji
-            # 3. Aktualizacja pozycji agenta
-            pass
+        for agent in agent_list:
+            if agent.id in actions:
+                next_pos = self._next_pos(agent, actions[agent.id])
+                rewards[agent.id] = agent.reward(next_pos, empty_cells)
+                if next_pos in empty_cells:
+                    agent.set_next_pos(next_pos)
+                    empty_cells.remove(next_pos)
 
-        # Po wykonaniu wszystkich ruchów:
-        for i, agent in enumerate(sorted(list(self.agents), key=lambda x: x.id)):
-            observations[f"agent_{i}"] = self._get_obs(agent)
-            rewards[f"agent_{i}"] = self._calculate_reward(agent)
+        remove_agents = set()
 
-        # Logika końca epizodu
-        terminated = all(a.task_finished for a in self.agents)
+        for agent in self.agents:
+            if agent.step():
+                remove_agents.add(agent)
+            if not agent.is_idle() and not agent.is_done():
+                observations[agent.id] = self._get_obs(agent)
 
-        return observations, sum(rewards.values()), terminated, False, {}
+        self.agents.difference_update(remove_agents)
+
+        truncated = self.step_count >= self.step_limit
+        terminated = len(self.agents) == 0
+
+        self.step_count += 1
+        return observations, rewards, terminated, truncated, {}
 
     def _in_view(self, agent: DeliveryRobot, pos: tuple[int, int]) -> bool:
         if pos is None:
@@ -146,19 +190,12 @@ class MultiRobotGridEnv(gym.Env):
             view[view_pos] = 1
 
     def _goal_vector(self, agent: DeliveryRobot) -> np.ndarray:
-        goal_pos = None
-        match agent.task:
-            case Task.PICKUP:
-                goal_pos = agent.goal
-            case Task.LEAVE:
-                goal_pos = self.depot
-
-        if goal_pos is None:
+        if agent.goal_pos is None:
             raise ValueError("Agent has no goal")
         max_dist = max(self.grid_width, self.grid_height)
         goal_vec = (
-            (goal_pos[0] - agent.pos[0]) / max_dist,
-            (goal_pos[1] - agent.pos[1]) / max_dist,
+            (agent.goal_pos[0] - agent.pos[0]) / max_dist,
+            (agent.goal_pos[1] - agent.pos[1]) / max_dist,
         )
         return np.array(goal_vec, dtype=np.float32)
 
@@ -190,9 +227,9 @@ class MultiRobotGridEnv(gym.Env):
             for cell in other_agent.get_occupied_cells():
                 self._add_if_in_view(agent, cell, other_agent_positions)
 
-            self._add_if_in_view(agent, other_agent.goal, other_agent_goals)
+            self._add_if_in_view(agent, other_agent.goal_pos, other_agent_goals)
 
-        self._add_if_in_view(agent, agent.goal, agent_goal)
+        self._add_if_in_view(agent, agent.goal_pos, agent_goal)
 
         goal_vector = self._goal_vector(agent)
 
@@ -203,17 +240,19 @@ class MultiRobotGridEnv(gym.Env):
             "goal_vector": goal_vector,
         }
 
-    def render(self, mode="human") -> str:
+    def render_text(self, mode="human") -> str:
         grid = np.full((self.grid_width, self.grid_height), ".", dtype=str)
         for x in range(self.grid_width):
             for y in range(self.grid_height):
                 if self.obstacles[x, y]:
                     grid[x, y] = "#"
-        gx, gy = self.depot
-        grid[gx, gy] = "D"
+
+        for d in self.depots:
+            gx, gy = d.pos
+            grid[gx, gy] = "D"
         for agent in self.agents:
-            if agent.task == Task.PICKUP:
-                ax, ay = agent.goal
+            if agent.task_type == TaskType.PICKUP:
+                ax, ay = agent.goal_pos
                 grid[ax, ay] = "o"
         for agent in self.agents:
             ax, ay = agent.pos
@@ -223,3 +262,85 @@ class MultiRobotGridEnv(gym.Env):
         for row in grid.T:
             out += " ".join(row) + "\n"
         return out
+
+    def render(self):
+        if self.window is None:
+            pygame.init()
+            pygame.display.init()
+            self.window = pygame.display.set_mode((self.window_size, self.window_size))
+            pygame.display.set_caption("Multi-Robot Delivery Grid")
+
+        if self.clock is None:
+            self.clock = pygame.time.Clock()
+
+        canvas = pygame.Surface((self.window_size, self.window_size))
+        canvas.fill((255, 255, 255))  # Białe tło
+
+        # 1. Rysowanie siatki i przeszkód
+        for x in range(self.grid_width):
+            for y in range(self.grid_height):
+                rect = pygame.Rect(
+                    x * self.cell_size,
+                    y * self.cell_size,
+                    self.cell_size,
+                    self.cell_size,
+                )
+
+                # Przeszkody (Czarne)
+                if self.obstacles[x, y]:
+                    pygame.draw.rect(canvas, (40, 40, 40), rect)
+
+                # Siatka (Szare linie)
+                pygame.draw.rect(canvas, (200, 200, 200), rect, 1)
+
+        # 2. Rysowanie Depotów (Niebieskie kwadraty)
+        for depot in self.depots:
+            d_rect = pygame.Rect(
+                depot.pos[0] * self.cell_size,
+                depot.pos[1] * self.cell_size,
+                self.cell_size,
+                self.cell_size,
+            )
+            pygame.draw.rect(canvas, (0, 0, 255), d_rect)
+
+        # 3. Rysowanie Robotów i ich Celów
+        for agent in self.agents:
+            text_color = (0, 0, 0)
+            agent_id_str = f"ID:{agent.id}"
+            # Cel (Małe kółko w kolorze agenta, ale przezroczyste/jasne)
+            if agent.goal_pos:
+                target_center = (
+                    agent.goal_pos[0] * self.cell_size + self.cell_size // 2,
+                    agent.goal_pos[1] * self.cell_size + self.cell_size // 2,
+                )
+                pygame.draw.circle(
+                    canvas, (0, 255, 0), target_center, self.cell_size // 4
+                )
+                goal_text = self.font.render(f"G:{agent.id}", True, text_color)
+                canvas.blit(
+                    goal_text,
+                    (target_center[0] - 15, target_center[1] - self.cell_size // 2),
+                )
+
+            # Robot (Czerwone koło)
+            agent_center = (
+                agent.pos[0] * self.cell_size + self.cell_size // 2,
+                agent.pos[1] * self.cell_size + self.cell_size // 2,
+            )
+            pygame.draw.circle(canvas, (255, 0, 0), agent_center, self.cell_size // 3)
+            agent_text = self.font.render(agent_id_str, True, text_color)
+            text_pos = (agent_center[0] - 15, agent_center[1] - self.cell_size // 2)
+            canvas.blit(agent_text, text_pos)
+
+        # Wyświetlenie na ekranie
+        self.window.blit(canvas, canvas.get_rect())
+        pygame.event.pump()
+        pygame.display.update()
+
+        # Ograniczenie FPS (np. 10 klatek na sekundę)
+        self.clock.tick(10)
+
+    def close(self):
+        if self.window is not None:
+            pygame.display.quit()
+            pygame.quit()
