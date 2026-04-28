@@ -1,14 +1,13 @@
 import random
-import time
 from collections import deque
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
 
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
+from src.utils.plots import save_avg_stepcount, save_completed_deliveries_plot
 
 
 class ReplayBuffer:
@@ -62,13 +61,11 @@ class DQNAgent:
         self.decay = decay
         self.n_actions = 5
 
-    def get_action(self, obs, device="cpu"):
-        # 1. Epsilon-greedy: Losowanie
+    def get_action(self, obs: list[dict], device="cpu"):
+
         if np.random.rand() <= self.epsilon:
             return np.random.randint(self.n_actions)
 
-        # 2. Wybór najlepszej akcji (Exploitation)
-        # Przygotowanie danych (dodanie wymiaru batch)
         view = torch.FloatTensor(obs["view"]).unsqueeze(0).to(device)
         goal = torch.FloatTensor(obs["goal_vector"]).unsqueeze(0).to(device)
 
@@ -77,111 +74,137 @@ class DQNAgent:
 
         return torch.argmax(q_values).item()
 
+    def get_actions(self, obs_list: list[dict], device="cpu"):
+
+        if np.random.rand() <= self.epsilon:
+            return np.random.randint(self.n_actions)
+
+        views = [o["view"] for o in obs_list]
+        goals = [o["goal_vector"] for o in obs_list]
+
+        views_tensor = torch.FloatTensor(np.stack(views)).to(device)
+        goals_tensor = torch.FloatTensor(np.stack(goals)).to(device)
+
+        with torch.no_grad():
+            q_values = self.model(views_tensor, goals_tensor)
+            actions = q_values.argmax(dim=1).cpu().numpy()
+
+        return actions
+
     def update_epsilon(self):
         self.epsilon = max(self.epsilon_min, self.epsilon * self.decay)
 
 
-def optimize_model(batch, policy_net, target_net, optimizer, gamma):
+def optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler):
     states, actions, rewards, next_states, dones = zip(*batch)
 
     device = next(policy_net.parameters()).device
-
-    views = torch.stack([torch.FloatTensor(s["view"]) for s in states]).to(device)
-    goal_vecs = torch.stack([torch.FloatTensor(s["goal_vector"]) for s in states]).to(
-        device
+    goals_np = np.stack([s["goal_vector"] for s in states])
+    goal_vecs = torch.from_numpy(goals_np).float().to(device, non_blocking=True)
+    next_goals_np = np.stack([s["goal_vector"] for s in next_states])
+    next_goal_vecs = (
+        torch.from_numpy(next_goals_np).float().to(device, non_blocking=True)
     )
+    views_np = np.stack([s["view"] for s in states])
+    views = torch.from_numpy(views_np).float().to(device, non_blocking=True)
+    next_views_np = np.stack([s["view"] for s in next_states])
+    next_views = torch.from_numpy(next_views_np).float().to(device, non_blocking=True)
 
-    actions = torch.LongTensor(actions).view(-1, 1).to(device)
-    rewards = torch.FloatTensor(rewards).to(device)
-    dones = torch.FloatTensor(dones).to(device)
+    actions = torch.LongTensor(actions).view(-1, 1).to(device, non_blocking=True)
+    rewards = torch.FloatTensor(rewards).to(device, non_blocking=True)
+    dones = torch.FloatTensor(dones).to(device, non_blocking=True)
 
-    next_views = torch.stack([torch.FloatTensor(s["view"]) for s in next_states]).to(
-        device
-    )
-    next_goal_vecs = torch.stack(
-        [torch.FloatTensor(s["goal_vector"]) for s in next_states]
-    ).to(device)
+    with torch.amp.autocast("cuda"):
+        current_q_values = policy_net(views, goal_vecs).gather(1, actions)
 
-    current_q_values = policy_net(views, goal_vecs).gather(1, actions)
+        with torch.no_grad():
+            max_next_q_values = target_net(next_views, next_goal_vecs).max(1)[0]
+            expected_q_values = rewards + (gamma * max_next_q_values * (1 - dones))
+            expected_q_values = expected_q_values.unsqueeze(1)
 
-    with torch.no_grad():
-        max_next_q_values = target_net(next_views, next_goal_vecs).max(1)[0]
-        expected_q_values = rewards + (gamma * max_next_q_values * (1 - dones))
+        loss = nn.MSELoss()(current_q_values, expected_q_values)
 
-    loss = nn.MSELoss()(current_q_values, expected_q_values.unsqueeze(1))
-
-    optimizer.zero_grad()
-    loss.backward()
-
-    # Opcjonalne: przycinanie gradientów (gradient clipping) zapobiega "wybuchaniu" wag
-    # torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 1.0)
-
-    optimizer.step()
+    optimizer.zero_grad(set_to_none=True)
+    scaler.scale(loss).backward()
+    scaler.unscale_(optimizer)
+    torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 1.0)
+    scaler.step(optimizer)
+    scaler.update()
 
     return loss.item()
 
 
 def train(
-    model_name: str = "DQN_model",
+    num_episodes: int = 100,
     view_size: int = 5,
+    num_agents: int = 1,
+    env_shape: tuple[int, int] = (5, 5),
+    step_limit: int = 100,
+    task_length: int = 5,
     device: torch.device = torch.device("cpu"),
-    num_episodes: int = 1000,
+    out_model_name: str = "DQN_model",
+    in_model_name=None,
+    plot: bool = True,
+    save_data: bool = False,
 ):
     # Inicjalizacja
-    filename = f"{model_name}_{view_size}.pth"
+    save_name = f"{out_model_name}_{view_size}"
+
+    filename = f"{save_name}.pth"
     script_path = Path(__file__).parent
-    dir_path = script_path.parent / "models"
-    dir_path.mkdir(exist_ok=True)
+    model_path = script_path.parent / "models"
+    plot_path = script_path.parent / "plots"
+    model_path.mkdir(exist_ok=True)
+    plot_path.mkdir(exist_ok=True)
 
     vshape = (4, view_size, view_size)
     policy_net = DQNet(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
     target_net = DQNet(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
+    if in_model_name:
+        path = model_path / f"{in_model_name}_{view_size}.pth"
+        weights_dict = torch.load(path, map_location=device)
+        policy_net.load_state_dict(weights_dict)
     target_net.load_state_dict(policy_net.state_dict())
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=1e-4)
+    scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
     memory = ReplayBuffer(20000)
     batch_size = 512
-    gamma = 0.99
+    gamma = 0.9
     env = MultiRobotGridEnv(
-        grid_size=(5, 5),
-        num_agents=1,
+        grid_size=env_shape,
+        num_agents=num_agents,
         agent_view_size=view_size,
-        step_limit=100,
+        step_limit=step_limit,
+        task_length=task_length,
     )
     agent_brain = DQNAgent(policy_net)
 
     completed_deliveries = [0] * num_episodes
+    completion_steps = [env.step_limit] * num_episodes
 
     for episode in range(num_episodes):
         obs, _ = env.reset()
         done = False
 
-        print(f"--- Epizode: {episode} ---")
+        print(f"--- Epizode: {episode}, epsilon: {agent_brain.epsilon:.5f} ", end="")
 
         while not done:
-            # 1. Wybierz akcje dla wszystkich agentów
             actions = {}
-            tic = time.time()
             for agent_id, agent_obs in obs.items():
                 actions[agent_id] = agent_brain.get_action(agent_obs, device)
-            print(f"Action choose time: {time.time() - tic}")
 
-            # 2. Wykonaj krok w środowisku
-            tic = time.time()
             next_obs, rewards, terminated, truncated, _ = env.step(actions)
-            print(f"Step time: {time.time() - tic}")
 
-            if terminated:
-                print("TERMINATED")
-                completed_deliveries[episode] = 1
-            if truncated:
-                print("TRUNCATED")
-                print(env.step_count)
             done = terminated or truncated
+            if terminated:
+                print("TERMINATED ---")
+                completed_deliveries[episode] = 1
+                completion_steps[episode] = env.step_count
 
-            # 3. Zapisz doświadczenie każdego agenta do pamięci
-            tic = time.time()
+            elif truncated:
+                print("TRUNCATED ---")
+
             for agent_id in obs.keys():
-                # if agent_id in next_obs:  # Tylko jeśli agent jeszcze istnieje
                 if agent_id in next_obs:
                     memory.push(
                         obs[agent_id],
@@ -190,28 +213,50 @@ def train(
                         next_obs[agent_id],
                         done,
                     )
-            print(f"Memory push time: {time.time() - tic}")
 
             obs = next_obs
 
-            tic = time.time()
             if len(memory) > batch_size:
                 batch = memory.sample(batch_size)
-                optimize_model(batch, policy_net, target_net, optimizer, gamma)
-            print(f"Optimize time: {time.time() - tic}")
+                optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler)
+
+        agent_brain.update_epsilon()
 
         # Co 10 epizodów aktualizuj Target Network
-        if episode % 10 == 0:
+        if episode % 10 == 0 and episode > 0:
             target_net.load_state_dict(policy_net.state_dict())
-            torch.save(target_net.state_dict(), dir_path / filename)
+            torch.save(target_net.state_dict(), model_path / filename)
 
-    plt.plot(completed_deliveries)
-    plt.show()
+    if plot:
+        save_completed_deliveries_plot(
+            completed_deliveries,
+            plot_path / f"{save_name}_completed_deliveries.png",
+            save_data=save_data,
+            window_size=20,
+        )
+        save_avg_stepcount(
+            completion_steps,
+            plot_path / f"{save_name}_avg_stepcount.png",
+            save_data=save_data,
+            window_size=20,
+        )
 
 
 if __name__ == "__main__":
     print("Training...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
-    train(num_episodes=500, device=device)
+    train(
+        num_episodes=200,
+        view_size=3,
+        num_agents=3,
+        env_shape=(5, 5),
+        step_limit=80,
+        task_length=5,
+        device=device,
+        out_model_name="DQN_model_triple3",
+        # in_model_name="DQN_model_single8",
+        plot=True,
+        save_data=False,
+    )
     print("Done")

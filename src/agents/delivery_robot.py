@@ -50,17 +50,20 @@ class DeliveryRobot:
         return False
 
     def reward(self, next_pos: tuple[int, int], empty_cells: set[tuple[int, int]]):
-        reward = -0.1
+        reward = -1
         if next_pos == self.pos:
             return reward
         if next_pos not in empty_cells:
-            return -10
+            return -20
         if next_pos == self.goal_pos:
             return 100
 
         old_dist = self._goal_distance(self.pos)
         new_dist = self._goal_distance(next_pos)
-        reward += old_dist - new_dist
+        dist_reward = old_dist - new_dist
+        if dist_reward < 0:
+            dist_reward *= 2
+        reward += dist_reward
 
         return reward
 

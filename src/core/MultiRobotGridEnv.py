@@ -64,6 +64,13 @@ class MultiRobotGridEnv(gym.Env):
                     shape=(2,),
                     dtype=np.float32,
                 ),
+                # If hit wall or other agent
+                "aditional_info": spaces.Box(
+                    low=0,
+                    high=1.0,
+                    shape=(1,),
+                    dtype=np.float32,
+                ),
             }
         )
 
@@ -193,10 +200,19 @@ class MultiRobotGridEnv(gym.Env):
         if agent.goal_pos is None:
             raise ValueError("Agent has no goal")
         max_dist = max(self.grid_width, self.grid_height)
-        goal_vec = (
-            (agent.goal_pos[0] - agent.pos[0]) / max_dist,
-            (agent.goal_pos[1] - agent.pos[1]) / max_dist,
-        )
+
+        dx = (agent.goal_pos[0] - agent.pos[0]) / max_dist
+        if dx < 0:
+            dx = -1
+        elif dx > 0:
+            dx = 1
+        dy = (agent.goal_pos[1] - agent.pos[1]) / max_dist
+        if dy < 0:
+            dy = -1
+        elif dy > 0:
+            dy = 1
+
+        goal_vec = [dx, dy]
         return np.array(goal_vec, dtype=np.float32)
 
     def _get_obs(self, agent: DeliveryRobot) -> dict[str, np.ndarray]:
@@ -238,6 +254,7 @@ class MultiRobotGridEnv(gym.Env):
                 [obstacles, other_agent_positions, other_agent_goals, agent_goal]
             ),
             "goal_vector": goal_vector,
+            "aditional_info": 0,
         }
 
     def render_text(self, mode="human") -> str:
@@ -327,7 +344,12 @@ class MultiRobotGridEnv(gym.Env):
                 agent.pos[0] * self.cell_size + self.cell_size // 2,
                 agent.pos[1] * self.cell_size + self.cell_size // 2,
             )
-            pygame.draw.circle(canvas, (255, 0, 0), agent_center, self.cell_size // 3)
+            r = (agent.id * 50) % 256
+            g = (agent.id * 80) % 256
+            b = (agent.id * 110) % 256
+
+            color = (r, g, b)
+            pygame.draw.circle(canvas, color, agent_center, self.cell_size // 3)
             agent_text = self.font.render(agent_id_str, True, text_color)
             text_pos = (agent_center[0] - 15, agent_center[1] - self.cell_size // 2)
             canvas.blit(agent_text, text_pos)
