@@ -43,7 +43,7 @@ def main(model_path="DQN_model_5.pth", env: MultiRobotGridEnv = None):
 
 
 if __name__ == "__main__":
-    model_path = "DQN_model_triple3_3.pth"
+    model_path = "DQN_model_single8_3.pth"
     env = MultiRobotGridEnv(
         grid_size=(5, 5),
         num_agents=1,
@@ -51,7 +51,7 @@ if __name__ == "__main__":
         step_limit=5000,
     )
 
-    for i in range(3, 6):
+    for i in range(1, 6):
         env.num_agents = i
         main(
             model_path=model_path,

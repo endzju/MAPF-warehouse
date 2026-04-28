@@ -19,6 +19,7 @@ class DeliveryRobot:
         self.task = task
         self.depot: Depot = depot
         self.id = id
+        self.was_blocked = False
 
         self.goal_pos = task.goals[0]
         self.task_type = task.goalTypes[0]

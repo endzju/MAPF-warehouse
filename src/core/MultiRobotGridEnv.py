@@ -257,7 +257,7 @@ class MultiRobotGridEnv(gym.Env):
             "aditional_info": 0,
         }
 
-    def render_text(self, mode="human") -> str:
+    def render_as_text(self, mode="human") -> str:
         grid = np.full((self.grid_width, self.grid_height), ".", dtype=str)
         for x in range(self.grid_width):
             for y in range(self.grid_height):
@@ -344,9 +344,9 @@ class MultiRobotGridEnv(gym.Env):
                 agent.pos[0] * self.cell_size + self.cell_size // 2,
                 agent.pos[1] * self.cell_size + self.cell_size // 2,
             )
-            r = (agent.id * 50) % 256
-            g = (agent.id * 80) % 256
-            b = (agent.id * 110) % 256
+            r = ((agent.id + 1) * 50) % 256
+            g = ((agent.id + 1) * 80) % 256
+            b = ((agent.id + 1) * 110) % 256
 
             color = (r, g, b)
             pygame.draw.circle(canvas, color, agent_center, self.cell_size // 3)

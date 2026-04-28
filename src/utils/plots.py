@@ -36,7 +36,7 @@ def save_avg_stepcount(
     window_size: int = 20,
 ):
     n = len(completion_steps)
-    avg_stepcount_sum = [0] * n
+    avg_stepcount_sum = [max(completion_steps)] * n
     for i in range(n):
         cur_winsize = min(i + 1, window_size)
         avg_stepcount_sum[i] = (
