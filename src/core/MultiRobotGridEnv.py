@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import gymnasium as gym
 import numpy as np
 import pygame
@@ -15,7 +17,7 @@ class MultiRobotGridEnv(gym.Env):
         grid_size: tuple[int, int] = (10, 10),
         num_agents: int = 5,
         agent_view_size: int = 5,
-        obstacles: list[tuple[int, int]] | None = None,
+        obstacles: set[tuple[int, int]] | None = None,
         depots: list[Depot] = [Depot((0, 0))],
         step_limit: int = 100,
         task_length: int = 5,
@@ -25,12 +27,14 @@ class MultiRobotGridEnv(gym.Env):
         self.num_states = self.grid_width * self.grid_height
         self.num_agents = num_agents
         self.obstacles = np.zeros((self.grid_width, self.grid_height), dtype=np.uint8)
+        self.obstacle_set = set()
         self.agent_view_size = agent_view_size
         self.agents: set[DeliveryRobot] = set()
 
         if obstacles:
             obs = np.array(obstacles, dtype=np.uint8)
             self.obstacles[obs[:, 0], obs[:, 1]] = 1
+            self.obstacle_set = obstacles
 
         self.depots = depots
         self.step_limit = step_limit
@@ -40,14 +44,6 @@ class MultiRobotGridEnv(gym.Env):
         # Akcje: 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT, 4=WAIT
         # MultiDiscrete pozwala zdefiniować akcję dla każdego robota naraz
         self.action_space = spaces.MultiDiscrete([5] * num_agents)
-
-        # Visualization
-        self.window_size = 600  # Rozmiar okna w pikselach
-        self.cell_size = self.window_size // max(self.grid_width, self.grid_height)
-        self.window = None
-        self.clock = None
-        pygame.font.init()
-        self.font = pygame.font.SysFont("Arial", 18)
 
         self.observation_space = spaces.Dict(
             {
@@ -74,6 +70,14 @@ class MultiRobotGridEnv(gym.Env):
             }
         )
 
+        # Visualization
+        self.window_size = 800  # Rozmiar okna w pikselach
+        self.cell_size = self.window_size // max(self.grid_width, self.grid_height)
+        self.window = None
+        self.clock = None
+        pygame.font.init()
+        self.font = pygame.font.SysFont("Arial", 18)
+
     def _depot_positions(self) -> set[tuple[int, int]]:
         return {depot.pos for depot in self.depots}
 
@@ -81,11 +85,11 @@ class MultiRobotGridEnv(gym.Env):
         indices = np.argwhere(self.obstacles == 1)
         return set(map(tuple, indices))
 
-    def get_empty_cells(self, include_depot: bool = False) -> set[tuple[int, int]]:
+    def get_empty_cells(self, is_depot_obstacle: bool = False) -> set[tuple[int, int]]:
         occupied_cells = self._obstacle_cells()
         for agent in self.agents:
             occupied_cells.update(agent.get_occupied_cells())
-        if include_depot:
+        if is_depot_obstacle:
             occupied_cells.update(self._depot_positions())
         all_cells = {
             (x, y) for x in range(self.grid_width) for y in range(self.grid_height)
@@ -96,8 +100,9 @@ class MultiRobotGridEnv(gym.Env):
     def reset(self, seed=None, options=None):
         self.step_count = 0
         super().reset(seed=seed)
+        self._calc_padded_obstacle_grid()
         self.agents.clear()
-        empty_cells = list(self.get_empty_cells(include_depot=True))
+        empty_cells = list(self.get_empty_cells(is_depot_obstacle=True))
         agent_indices = self.np_random.choice(
             len(empty_cells), size=self.num_agents, replace=False
         )
@@ -115,7 +120,7 @@ class MultiRobotGridEnv(gym.Env):
             goal_positions = [empty_cells[goal_i] for goal_i in goal_indices] + [
                 self.depots[0].pos
             ]
-            task_types = [TaskType.PICKUP] * len(goal_positions) + [TaskType.LEAVE]
+            task_types = [TaskType.PICKUP] * len(goal_indices) + [TaskType.LEAVE]
             task = Task(goal_positions, task_types, id=i)
             robot = DeliveryRobot(
                 position=agent_pos, task=task, depot=self.depots[0], id=i
@@ -142,26 +147,29 @@ class MultiRobotGridEnv(gym.Env):
         # actions to array np. [akcja_robota_0, akcja_robota_1, ...]
         observations = {}
         rewards = {}
+        self._calc_padded_obstacle_grid()
 
-        empty_cells = self.get_empty_cells(include_depot=False)
-
+        previous_empty_cells = self.get_empty_cells(is_depot_obstacle=False)
+        empty_cells = set(previous_empty_cells)
         agent_list = list(self.agents)
         self.np_random.shuffle(agent_list)
 
         for agent in agent_list:
             if agent.id in actions:
                 next_pos = self._next_pos(agent, actions[agent.id])
-                rewards[agent.id] = agent.reward(next_pos, empty_cells)
                 if next_pos in empty_cells:
+                    rewards[agent.id] = agent.reward(next_pos, empty_cells)
                     agent.set_next_pos(next_pos)
                     empty_cells.remove(next_pos)
+                else:
+                    rewards[agent.id] = agent.reward(next_pos, previous_empty_cells)
 
         remove_agents = set()
 
         for agent in self.agents:
             if agent.step():
                 remove_agents.add(agent)
-            if not agent.is_idle() and not agent.is_done():
+            elif not agent.is_idle() and not agent.is_done():
                 observations[agent.id] = self._get_obs(agent)
 
         self.agents.difference_update(remove_agents)
@@ -173,8 +181,10 @@ class MultiRobotGridEnv(gym.Env):
         return observations, rewards, terminated, truncated, {}
 
     def _in_view(self, agent: DeliveryRobot, pos: tuple[int, int]) -> bool:
-        if pos is None:
-            return False
+        if agent.pos is None:
+            raise ValueError("Agent has no position")
+        elif pos is None:
+            raise ValueError("View position is None")
         radius = self.agent_view_size // 2
         ax, ay = agent.pos
         return (
@@ -187,11 +197,13 @@ class MultiRobotGridEnv(gym.Env):
     ) -> tuple[int, int]:
         radius = self.agent_view_size // 2
         ax, ay = agent.pos
-        return (pos[0] - ax + radius, pos[1] - ay + radius)
+        return (pos[1] - ay + radius, pos[0] - ax + radius)
 
     def _add_if_in_view(
         self, agent: DeliveryRobot, pos: tuple[int, int], view: np.ndarray
     ):
+        if pos is None:
+            return
         if self._in_view(agent, pos):
             view_pos = self._view_position(agent, pos)
             view[view_pos] = 1
@@ -215,17 +227,21 @@ class MultiRobotGridEnv(gym.Env):
         goal_vec = [dx, dy]
         return np.array(goal_vec, dtype=np.float32)
 
-    def _get_obs(self, agent: DeliveryRobot) -> dict[str, np.ndarray]:
+    def _calc_padded_obstacle_grid(self):
         radius = self.agent_view_size // 2
-        padded_grid = np.pad(
+        self._padded_obstacle_grid = np.pad(
             self.obstacles, pad_width=radius, mode="constant", constant_values=1
         )
+
+    def _get_obs(self, agent: DeliveryRobot) -> dict[str, np.ndarray]:
+        radius = self.agent_view_size // 2
+
         ax, ay = agent.pos
         padded_ax = ax + radius
         padded_ay = ay + radius
-        obstacles = padded_grid[
-            padded_ax - radius : padded_ax + radius + 1,
+        obstacles = self._padded_obstacle_grid[
             padded_ay - radius : padded_ay + radius + 1,
+            padded_ax - radius : padded_ax + radius + 1,
         ]
         other_agent_positions = np.zeros(
             shape=(self.agent_view_size, self.agent_view_size), dtype=np.uint8
@@ -284,23 +300,54 @@ class MultiRobotGridEnv(gym.Env):
         if self.window is None:
             pygame.init()
             pygame.display.init()
-            self.window = pygame.display.set_mode((self.window_size, self.window_size))
+            self.window = pygame.display.set_mode(
+                (self.window_size, self.window_size), pygame.RESIZABLE
+            )
             pygame.display.set_caption("Multi-Robot Delivery Grid")
+            images_path = Path(__file__).parent.parent / "assets" / "images"
+            self.robot_img = pygame.image.load(
+                images_path / "robot.png"
+            ).convert_alpha()
+            self.package_img = pygame.image.load(
+                images_path / "package.png"
+            ).convert_alpha()
+            self.exit_img = pygame.image.load(images_path / "exit.png").convert_alpha()
 
         if self.clock is None:
             self.clock = pygame.time.Clock()
 
         canvas = pygame.Surface((self.window_size, self.window_size))
         canvas.fill((255, 255, 255))  # Białe tło
+        for event in pygame.event.get():
+            if event.type == pygame.VIDEORESIZE:
+                # Aktualizacja rozmiaru okna i powierzchni
+                self.window = pygame.display.set_mode(
+                    (event.w, event.h), pygame.RESIZABLE
+                )
+
+        current_w, current_h = self.window.get_size()
+        canvas = pygame.Surface((current_w, current_h))
+        canvas.fill((255, 255, 255))
+
+        scale_x = current_w // self.grid_width
+        scale_y = current_h // self.grid_height
+        dynamic_cell_size = min(scale_x, scale_y)
+
+        grid_total_width = self.grid_width * dynamic_cell_size
+        grid_total_height = self.grid_height * dynamic_cell_size
+
+        # Obliczamy marginesy, aby wyśrodkować siatkę
+        offset_x = (current_w - grid_total_width) // 2
+        offset_y = (current_h - grid_total_height) // 2
 
         # 1. Rysowanie siatki i przeszkód
         for x in range(self.grid_width):
             for y in range(self.grid_height):
                 rect = pygame.Rect(
-                    x * self.cell_size,
-                    y * self.cell_size,
-                    self.cell_size,
-                    self.cell_size,
+                    offset_x + x * dynamic_cell_size,
+                    offset_y + y * dynamic_cell_size,
+                    dynamic_cell_size,
+                    dynamic_cell_size,
                 )
 
                 # Przeszkody (Czarne)
@@ -313,10 +360,10 @@ class MultiRobotGridEnv(gym.Env):
         # 2. Rysowanie Depotów (Niebieskie kwadraty)
         for depot in self.depots:
             d_rect = pygame.Rect(
-                depot.pos[0] * self.cell_size,
-                depot.pos[1] * self.cell_size,
-                self.cell_size,
-                self.cell_size,
+                offset_x + depot.pos[0] * dynamic_cell_size,
+                offset_y + depot.pos[1] * dynamic_cell_size,
+                dynamic_cell_size,
+                dynamic_cell_size,
             )
             pygame.draw.rect(canvas, (0, 0, 255), d_rect)
 
@@ -326,33 +373,49 @@ class MultiRobotGridEnv(gym.Env):
             agent_id_str = f"ID:{agent.id}"
             # Cel (Małe kółko w kolorze agenta, ale przezroczyste/jasne)
             if agent.goal_pos:
-                target_center = (
-                    agent.goal_pos[0] * self.cell_size + self.cell_size // 2,
-                    agent.goal_pos[1] * self.cell_size + self.cell_size // 2,
+                pos_x = offset_x + agent.goal_pos[0] * dynamic_cell_size
+                pos_y = offset_y + agent.goal_pos[1] * dynamic_cell_size
+                goal_img = (
+                    self.exit_img
+                    if agent.task_type == TaskType.LEAVE
+                    else self.package_img
                 )
-                pygame.draw.circle(
-                    canvas, (0, 255, 0), target_center, self.cell_size // 4
-                )
-                goal_text = self.font.render(f"G:{agent.id}", True, text_color)
-                canvas.blit(
-                    goal_text,
-                    (target_center[0] - 15, target_center[1] - self.cell_size // 2),
+                goal_scaled = pygame.transform.scale(
+                    goal_img, (dynamic_cell_size, dynamic_cell_size)
                 )
 
-            # Robot (Czerwone koło)
-            agent_center = (
-                agent.pos[0] * self.cell_size + self.cell_size // 2,
-                agent.pos[1] * self.cell_size + self.cell_size // 2,
+                r = ((agent.id + 1) * 50) % 256
+                g = ((agent.id + 1) * 80) % 256
+                b = ((agent.id + 1) * 110) % 256
+                goal_scaled.fill((r, g, b, 255), special_flags=pygame.BLEND_RGBA_MULT)
+
+                canvas.blit(goal_scaled, (pos_x, pos_y))
+
+                goal_text = self.font.render(f"G:{agent.id}", True, text_color)
+                canvas.blit(goal_text, (pos_x, pos_y - 15))
+
+            # 1. Pozycja
+            pos_x = offset_x + agent.pos[0] * dynamic_cell_size
+            pos_y = offset_y + agent.pos[1] * dynamic_cell_size
+
+            # 2. Skalowanie
+            robot_scaled = pygame.transform.scale(
+                self.robot_img, (dynamic_cell_size, dynamic_cell_size)
             )
+
+            # 3. Kolorowanie (opcjonalnie, jeśli obrazek jest biały)
             r = ((agent.id + 1) * 50) % 256
             g = ((agent.id + 1) * 80) % 256
             b = ((agent.id + 1) * 110) % 256
+            robot_scaled.fill((r, g, b, 255), special_flags=pygame.BLEND_RGBA_MULT)
 
-            color = (r, g, b)
-            pygame.draw.circle(canvas, color, agent_center, self.cell_size // 3)
-            agent_text = self.font.render(agent_id_str, True, text_color)
-            text_pos = (agent_center[0] - 15, agent_center[1] - self.cell_size // 2)
-            canvas.blit(agent_text, text_pos)
+            # 4. Wyświetlenie
+            canvas.blit(robot_scaled, (pos_x, pos_y))
+
+            # 5. Tekst ID (centrowanie napisu nad robotem)
+            agent_id_str = f"ID:{agent.id}"
+            agent_text = self.font.render(agent_id_str, True, (0, 0, 0))
+            canvas.blit(agent_text, (pos_x, pos_y - 15))
 
         # Wyświetlenie na ekranie
         self.window.blit(canvas, canvas.get_rect())

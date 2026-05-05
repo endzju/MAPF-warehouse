@@ -35,6 +35,10 @@ class DeliveryRobot:
             self.idle_time = max(0, self.idle_time - 1)
             return False
 
+        if self.task_type == TaskType.LEAVE and self.pos == self.depot.pos:
+            self.depot.stored_agents.append(self)
+            return True
+
         if self.next_pos:
             self.pos = self.next_pos
             self.next_pos = None
@@ -43,10 +47,6 @@ class DeliveryRobot:
             self.idle_time = 1
             self._next_task()
             return False
-
-        if self.task_type == TaskType.LEAVE and self.pos == self.depot.pos:
-            self.depot.stored_agents.append(self)
-            return True
 
         return False
 
@@ -62,8 +62,11 @@ class DeliveryRobot:
         old_dist = self._goal_distance(self.pos)
         new_dist = self._goal_distance(next_pos)
         dist_reward = old_dist - new_dist
+
         if dist_reward < 0:
-            dist_reward *= 2
+            dist_reward *= 5
+        else:
+            dist_reward *= 2.5
         reward += dist_reward
 
         return reward

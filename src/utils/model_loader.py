@@ -1,15 +1,14 @@
 from pathlib import Path
 
 import torch
+import torch.nn as nn
 
-from src.neural_networks.DQN.dqn import DQNet
 
-
-def load_model(model_path: str):
+def load_model(model_path: str, model_class: nn.Module):
     device = "cpu"
     view_size = int(model_path.split("_")[-1].split(".")[0])
     vshape = (4, view_size, view_size)
-    model = DQNet(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
+    model = model_class(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
     script_path = Path(__file__).parent
     path = script_path.parent / "neural_networks" / "models" / model_path
     weights_dict = torch.load(path, map_location=device)

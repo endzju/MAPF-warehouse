@@ -7,9 +7,11 @@ import numpy as np
 def save_completed_deliveries_plot(
     completed_deliveries: list[int],
     path: Path,
+    filename: str,
     save_data: bool = False,
     window_size: int = 20,
 ):
+    path = path / f"{filename}_completed_deliveries_w{window_size}.png"
     n = len(completed_deliveries)
     completed_deliveries_sum = [0] * n
     for i in range(n):
@@ -32,15 +34,17 @@ def save_completed_deliveries_plot(
 def save_avg_stepcount(
     completion_steps: list[int],
     path: Path,
+    filename: str,
     save_data: bool = False,
     window_size: int = 20,
 ):
+    path = path / f"{filename}_avg_completion_steps_w{window_size}.png"
     n = len(completion_steps)
     avg_stepcount_sum = [max(completion_steps)] * n
     for i in range(n):
         cur_winsize = min(i + 1, window_size)
         avg_stepcount_sum[i] = (
-            sum(completion_steps[i - window_size + 1 : i + 1]) / cur_winsize
+            sum(completion_steps[i - cur_winsize + 1 : i + 1]) / cur_winsize
         )
     plt.figure(figsize=(10, 6))
     x = range(n)
