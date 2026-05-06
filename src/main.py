@@ -51,11 +51,11 @@ def main(
 
 
 if __name__ == "__main__":
-    model_path = "DQNet1_1_3.pth"
+    model_path = "DQNet1_3_5.pth"
     env = MultiRobotGridEnv(
         grid_size=(10, 10),
         num_agents=1,
-        agent_view_size=3,
+        agent_view_size=5,
         step_limit=5000,
     )
 

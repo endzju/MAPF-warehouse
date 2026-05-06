@@ -78,7 +78,7 @@ def train(
 ):
     if out_model_name is None:
         out_model_name = (
-            f"{type(model_class).__name__}_{env.num_agents}_{env.agent_view_size}"
+            f"{model_class.__name__}_{env.num_agents}_{env.agent_view_size}"
         )
     view_size = env.agent_view_size
 
@@ -182,18 +182,18 @@ if __name__ == "__main__":
     obs = [(1, 1), (3, 4)]
     env = MultiRobotGridEnv(
         grid_size=(10, 10),
-        num_agents=5,
+        num_agents=3,
         agent_view_size=5,
         step_limit=150,
         task_length=5,
         # obstacles=obs,
     )
     train(
-        num_episodes=500,
+        num_episodes=200,
         env=env,
         device=device,
-        # out_model_name="DQN_1",
-        # in_model_name="DQN_1",
+        out_model_name="DQNet_1_1_5_test",
+        in_model_name="DQNet1_1",
         plot=True,
         save_data=False,
         model_class=DQNet1,
