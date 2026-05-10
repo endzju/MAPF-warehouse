@@ -2,6 +2,7 @@ import time
 
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
+from src.neural_networks.CNN.cnn import CNN1  # noqa: F401
 from src.neural_networks.DQN.dqn import DQNet1, DQNet2, DQNet3
 from src.utils.model_loader import load_model
 
@@ -45,24 +46,24 @@ def main(
         print()
         env.render()
 
-        time.sleep(0.4)
+        time.sleep(0.1)
 
     print("Symulacja zakończona")
 
 
 if __name__ == "__main__":
-    model_path = "DQNet1_3_5.pth"
+    model_path = "CNN1_8_5.pth"
     env = MultiRobotGridEnv(
         grid_size=(10, 10),
-        num_agents=1,
+        num_agents=8,
         agent_view_size=5,
         step_limit=5000,
     )
 
-    for i in range(1, 20):
+    for i in range(10, 50):
         env.num_agents = i
         main(
             model_path=model_path,
             env=env,
-            model_class=DQNet1,
+            model_class=CNN1,
         )

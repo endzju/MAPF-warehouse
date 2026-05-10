@@ -11,6 +11,6 @@ def load_model(model_path: str, model_class: nn.Module):
     model = model_class(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
     script_path = Path(__file__).parent
     path = script_path.parent / "neural_networks" / "models" / model_path
-    weights_dict = torch.load(path, map_location=device)
+    weights_dict = torch.load(path, map_location=device, weights_only=True)
     model.load_state_dict(weights_dict)
     return model

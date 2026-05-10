@@ -75,14 +75,18 @@ def train(
     out_model_name=None,
     plot: bool = True,
     save_data: bool = False,
+    epsilon: float = 1.0,
+    epsilon_min: float = 0.01,
+    epsilon_decay: float = 0.995,
+    epsilon_episodes: int = 500,
 ):
     if out_model_name is None:
         out_model_name = (
-            f"{model_class.__name__}_{env.num_agents}_{env.agent_view_size}"
+            f"{model_class.__name__}_{env.num_agents}_{env.agent_view_size}.pth"
         )
     view_size = env.agent_view_size
 
-    filename = f"{out_model_name}.pth"
+    filename = out_model_name
     nn_path = Path(__file__).parent.parent / "neural_networks"
     model_path = nn_path / "models"
     plot_path = nn_path / "plots"
@@ -93,27 +97,31 @@ def train(
     policy_net = model_class(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
     target_net = model_class(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
     if in_model_name:
-        path = model_path / f"{in_model_name}_{view_size}.pth"
+        path = model_path / in_model_name
         weights_dict = torch.load(path, map_location=device)
         policy_net.load_state_dict(weights_dict)
     target_net.load_state_dict(policy_net.state_dict())
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=1e-4)
     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
     batch_size = 512
+    num_batches = 1
+    update_episodes = 20
     memory = ReplayBuffer(1000 * batch_size)
 
     gamma = 0.99
     agent_brain = ActionAgent(
         model=policy_net,
-        epsilon=1.0,
-        epsilon_min=0.05,
-        decay=0.995,
+        epsilon=epsilon,
+        epsilon_min=epsilon_min,
+        decay=epsilon_decay,
     )
 
     completed_deliveries = [0] * num_episodes
     completion_steps = [env.step_limit] * num_episodes
 
     for episode in range(num_episodes):
+        if episode > epsilon_episodes:
+            agent_brain.epsilon = 0
         obs, _ = env.reset()
         done = False
 
@@ -148,13 +156,16 @@ def train(
             obs = next_obs
 
             if len(memory) > batch_size:
-                batch = memory.sample(batch_size)
-                optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler)
+                for _ in range(num_batches):
+                    batch = memory.sample(batch_size)
+                    optimize_model(
+                        batch, policy_net, target_net, optimizer, gamma, scaler
+                    )
 
         agent_brain.update_epsilon()
 
-        # Co 10 epizodów aktualizuj Target Network
-        if episode % 10 == 0 and episode > 0:
+        # Co {update_episodes} epizodów aktualizuj Target Network
+        if episode % update_episodes == 0 and episode > 0:
             target_net.load_state_dict(policy_net.state_dict())
             torch.save(target_net.state_dict(), model_path / filename)
 
@@ -182,20 +193,23 @@ if __name__ == "__main__":
     obs = [(1, 1), (3, 4)]
     env = MultiRobotGridEnv(
         grid_size=(10, 10),
-        num_agents=3,
+        num_agents=8,
         agent_view_size=5,
-        step_limit=150,
+        step_limit=300,
         task_length=5,
         # obstacles=obs,
     )
     train(
-        num_episodes=200,
+        num_episodes=500,
         env=env,
         device=device,
-        out_model_name="DQNet_1_1_5_test",
-        in_model_name="DQNet1_1",
+        # out_model_name="DQNet1+_8_5.pth",
+        # in_model_name="DQNet1_8_5.pth",
         plot=True,
         save_data=False,
-        model_class=DQNet1,
+        model_class=CNN1,
+        # epsilon=0,
+        # epsilon_min=0,
+        # epsilon_decay=0.995,
     )
     print("Done")

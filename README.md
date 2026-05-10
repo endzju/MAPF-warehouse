@@ -6,4 +6,4 @@ uv run python -m src.main
 
 How to train models?
 
-uv run python -m src.neural_networks.DQN.dqn
+uv run python -m src.utils.model_trainer
