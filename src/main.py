@@ -15,14 +15,12 @@ def main(
 
     if ".pth" not in model_path:
         model_path += ".pth"
-    # view_size = int(model_path.split("_")[-1].split(".")[0])
 
     observations, info = env.reset()
 
     terminated = False
     truncated = False
     total_step = 0
-    # id_to_agent = {agent.id: agent for agent in env.agents}
 
     while not (terminated or truncated):
         # 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT, 4=WAIT
@@ -52,15 +50,15 @@ def main(
 
 
 if __name__ == "__main__":
-    model_path = "CNN1_8_5.pth"
+    model_path = "CNN1+copy_8_5.pth"
     env = MultiRobotGridEnv(
-        grid_size=(10, 10),
-        num_agents=8,
+        grid_size=(50, 50),
+        num_agents=50,
         agent_view_size=5,
         step_limit=5000,
     )
 
-    for i in range(10, 50):
+    for i in range(50, 100):
         env.num_agents = i
         main(
             model_path=model_path,

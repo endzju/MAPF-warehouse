@@ -17,7 +17,7 @@ class ActionAgent:
         self.decay = decay
         self.n_actions = 5
 
-    def get_action(self, obs: dict, device="cpu"):
+    def get_action(self, obs: dict, device="cpu") -> int:
 
         if np.random.rand() <= self.epsilon:
             return np.random.randint(self.n_actions)
@@ -30,21 +30,30 @@ class ActionAgent:
 
         return torch.argmax(q_values).item()
 
-    def get_actions(self, obs_list: list[dict], device="cpu"):
+    def get_actions(self, obs_dict: dict[dict], device="cpu") -> dict[int, int]:
+        actions = {}
+        network_indices = []
+        for idx in obs_dict.keys():
+            if np.random.rand() <= self.epsilon:
+                actions[idx] = int(np.random.randint(self.n_actions))
+            else:
+                network_indices.append(idx)
 
-        if np.random.rand() <= self.epsilon:
-            return np.random.randint(self.n_actions)
+        if not network_indices:
+            return actions
 
-        views = [o["view"] for o in obs_list]
-        goals = [o["goal_vector"] for o in obs_list]
+        views = [obs_dict[i]["view"] for i in network_indices]
+        goals = [obs_dict[i]["goal_vector"] for i in network_indices]
 
         views_tensor = torch.FloatTensor(np.stack(views)).to(device)
         goals_tensor = torch.FloatTensor(np.stack(goals)).to(device)
 
         with torch.no_grad():
             q_values = self.model(views_tensor, goals_tensor)
-            actions = q_values.argmax(dim=1).cpu().numpy()
+            network_actions = q_values.argmax(dim=1).cpu().numpy()
 
+        for idx, action in zip(network_indices, network_actions):
+            actions[idx] = int(action)
         return actions
 
     def update_epsilon(self):

@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
@@ -31,35 +32,55 @@ def optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler):
     states, actions, rewards, next_states, dones = zip(*batch)
 
     device = next(policy_net.parameters()).device
-    goals_np = np.stack([s["goal_vector"] for s in states])
-    goal_vecs = torch.from_numpy(goals_np).float().to(device, non_blocking=True)
-    next_goals_np = np.stack([s["goal_vector"] for s in next_states])
-    next_goal_vecs = (
-        torch.from_numpy(next_goals_np).float().to(device, non_blocking=True)
-    )
-    views_np = np.stack([s["view"] for s in states])
-    views = torch.from_numpy(views_np).float().to(device, non_blocking=True)
-    next_views_np = np.stack([s["view"] for s in next_states])
-    next_views = torch.from_numpy(next_views_np).float().to(device, non_blocking=True)
 
-    actions = torch.LongTensor(actions).view(-1, 1).to(device, non_blocking=True)
-    rewards = torch.FloatTensor(rewards).to(device, non_blocking=True)
-    dones = torch.FloatTensor(dones).to(device, non_blocking=True)
+    batch_size = len(states)
+    view_shape = states[0]["view"].shape
+    goal_shape = states[0]["goal_vector"].shape
+
+    # 2. Alokujemy pamięć w NumPy (bardzo szybkie)
+    views_np = np.empty((batch_size, *view_shape), dtype=np.float32)
+    next_views_np = np.empty((batch_size, *view_shape), dtype=np.float32)
+    goals_np = np.empty((batch_size, *goal_shape), dtype=np.float32)
+    next_goals_np = np.empty((batch_size, *goal_shape), dtype=np.float32)
+
+    for i in range(batch_size):
+        views_np[i] = states[i]["view"]
+        next_views_np[i] = next_states[i]["view"]
+        goals_np[i] = states[i]["goal_vector"]
+        next_goals_np[i] = next_states[i]["goal_vector"]
+
+    # 4. Konwersja na sensory PyTorch
+    views = torch.as_tensor(views_np).to(device, non_blocking=True)
+    next_views = torch.as_tensor(next_views_np).to(device, non_blocking=True)
+    goal_vecs = torch.as_tensor(goals_np).to(device, non_blocking=True)
+    next_goal_vecs = torch.as_tensor(next_goals_np).to(device, non_blocking=True)
+
+    actions = (
+        torch.as_tensor(actions, dtype=torch.long)
+        .to(device, non_blocking=True)
+        .view(-1, 1)
+    )
+    rewards = torch.as_tensor(rewards, dtype=torch.float32).to(
+        device, non_blocking=True
+    )
+    dones = torch.as_tensor(dones, dtype=torch.float32).to(device, non_blocking=True)
 
     with torch.amp.autocast("cuda"):
         current_q_values = policy_net(views, goal_vecs).gather(1, actions)
 
         with torch.no_grad():
-            max_next_q_values = target_net(next_views, next_goal_vecs).max(1)[0]
-            expected_q_values = rewards + (gamma * max_next_q_values * (1 - dones))
+            max_next_q_values = target_net(next_views, next_goal_vecs).max(dim=1).values
+            expected_q_values = rewards + (gamma * max_next_q_values * (1.0 - dones))
             expected_q_values = expected_q_values.unsqueeze(1)
 
-        loss = nn.MSELoss()(current_q_values, expected_q_values)
+        loss = F.mse_loss(current_q_values, expected_q_values)
 
     optimizer.zero_grad(set_to_none=True)
     scaler.scale(loss).backward()
+
     scaler.unscale_(optimizer)
     torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 1.0)
+
     scaler.step(optimizer)
     scaler.update()
 
@@ -90,15 +111,17 @@ def train(
     nn_path = Path(__file__).parent.parent / "neural_networks"
     model_path = nn_path / "models"
     plot_path = nn_path / "plots"
+    history_path = nn_path / "history"
     model_path.mkdir(exist_ok=True)
     plot_path.mkdir(exist_ok=True)
+    history_path.mkdir(exist_ok=True)
 
     vshape = (4, view_size, view_size)
     policy_net = model_class(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
     target_net = model_class(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
     if in_model_name:
         path = model_path / in_model_name
-        weights_dict = torch.load(path, map_location=device)
+        weights_dict = torch.load(path, map_location=device, weights_only=True)
         policy_net.load_state_dict(weights_dict)
     target_net.load_state_dict(policy_net.state_dict())
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=1e-4)
@@ -128,9 +151,7 @@ def train(
         print(f"--- Episode: {episode}, epsilon: {agent_brain.epsilon:.5f} ", end="")
 
         while not done:
-            actions = {}
-            for agent_id, agent_obs in obs.items():
-                actions[agent_id] = agent_brain.get_action(agent_obs, device)
+            actions = agent_brain.get_actions(obs, device)
 
             next_obs, rewards, terminated, truncated, _ = env.step(actions)
 
@@ -164,10 +185,15 @@ def train(
 
         agent_brain.update_epsilon()
 
-        # Co {update_episodes} epizodów aktualizuj Target Network
+        # Every {update_episodes} epizodes update Target Network and save model to history
         if episode % update_episodes == 0 and episode > 0:
             target_net.load_state_dict(policy_net.state_dict())
-            torch.save(target_net.state_dict(), model_path / filename)
+            torch.save(
+                target_net.state_dict(), history_path / f"epizode{episode}_{filename}"
+            )
+
+    # Save model after training
+    torch.save(policy_net.state_dict(), model_path / filename)
 
     if plot:
         save_completed_deliveries_plot(
@@ -200,16 +226,16 @@ if __name__ == "__main__":
         # obstacles=obs,
     )
     train(
-        num_episodes=500,
+        num_episodes=50,
         env=env,
         device=device,
-        # out_model_name="DQNet1+_8_5.pth",
-        # in_model_name="DQNet1_8_5.pth",
+        out_model_name="CNN1+_8_5.pth",
+        in_model_name="CNN1_8_5.pth",
         plot=True,
         save_data=False,
         model_class=CNN1,
-        # epsilon=0,
-        # epsilon_min=0,
-        # epsilon_decay=0.995,
+        epsilon=0,
+        epsilon_min=0,
+        epsilon_decay=0.995,
     )
     print("Done")
