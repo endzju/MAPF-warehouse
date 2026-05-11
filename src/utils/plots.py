@@ -10,7 +10,7 @@ def save_completed_deliveries_plot(
     filename: str,
     save_data: bool = False,
     window_size: int = 20,
-    epsilon: float = None,
+    start_eps: float = None,
     epsilon_decay: float = None,
 ):
     filename = filename.removesuffix(".pth")
@@ -24,8 +24,8 @@ def save_completed_deliveries_plot(
     plt.figure(figsize=(10, 6))
     x = range(n)
     plt.plot(x, completed_deliveries_sum)
-    if epsilon is not None and epsilon_decay is not None:
-        y = [epsilon * (epsilon_decay**i) for i in x]
+    if start_eps is not None and epsilon_decay is not None:
+        y = [start_eps * (epsilon_decay**i) for i in x]
         plt.plot(x, y, label="eps")
     plt.title(f"Completed deliveries in last {window_size} episodes")
     plt.xlabel("episode")
@@ -43,7 +43,7 @@ def save_avg_stepcount(
     filename: str,
     save_data: bool = False,
     window_size: int = 20,
-    epsilon: float = None,
+    start_eps: float = None,
     epsilon_decay: float = None,
 ):
     filename = filename.removesuffix(".pth")
@@ -58,8 +58,8 @@ def save_avg_stepcount(
     plt.figure(figsize=(10, 6))
     x = range(n)
     plt.plot(x, avg_stepcount_sum)
-    if epsilon is not None and epsilon_decay is not None:
-        y = [epsilon * (epsilon_decay**i) for i in x]
+    if start_eps is not None and epsilon_decay is not None:
+        y = [start_eps * (epsilon_decay**i) for i in x]
         plt.plot(x, y, label="eps")
     plt.title(f"Average stepcount in last {window_size} episodes")
     plt.xlabel("episode")
@@ -75,7 +75,7 @@ def save_stepcount(
     path: Path,
     filename: str,
     save_data: bool = False,
-    epsilon: float = None,
+    start_eps: float = None,
     epsilon_decay: float = None,
 ):
     filename = filename.removesuffix(".pth")
@@ -83,8 +83,8 @@ def save_stepcount(
     plt.figure(figsize=(10, 6))
     x = range(len(completion_steps))
     plt.plot(x, completion_steps)
-    if epsilon is not None and epsilon_decay is not None:
-        y = [epsilon * (epsilon_decay**i) for i in x]
+    if start_eps is not None and epsilon_decay is not None:
+        y = [start_eps * (epsilon_decay**i) for i in x]
         plt.plot(x, y, label="eps")
     plt.title("Stepcount")
     plt.xlabel("episode")

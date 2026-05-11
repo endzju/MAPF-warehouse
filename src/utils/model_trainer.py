@@ -1,4 +1,6 @@
+import math
 import random
+import time
 from collections import deque
 from pathlib import Path
 
@@ -32,44 +34,72 @@ class ReplayBuffer:
         return len(self.buffer)
 
 
+class EfficientReplayBuffer:
+    def __init__(self, capacity, view_shape, goal_shape):
+        self.capacity = capacity
+        self.ptr = 0
+        self.size = 0
+
+        self.views = np.zeros((capacity, *view_shape), dtype=np.float32)
+        self.next_views = np.zeros((capacity, *view_shape), dtype=np.float32)
+        self.goals = np.zeros((capacity, *goal_shape), dtype=np.float32)
+        self.next_goals = np.zeros((capacity, *goal_shape), dtype=np.float32)
+
+        self.actions = np.zeros(capacity, dtype=np.int64)
+        self.rewards = np.zeros(capacity, dtype=np.float32)
+        self.dones = np.zeros(capacity, dtype=np.float32)
+
+    def push(self, state, action, reward, next_state, done):
+        idx = self.ptr
+        self.views[idx] = state["view"]
+        self.next_views[idx] = next_state["view"]
+        self.goals[idx] = state["goal_vector"]
+        self.next_goals[idx] = next_state["goal_vector"]
+        self.actions[idx] = action
+        self.rewards[idx] = reward
+        self.dones[idx] = float(done)
+
+        self.ptr = (self.ptr + 1) % self.capacity
+        self.size = min(self.size + 1, self.capacity)
+
+    def sample(self, batch_size):
+        idxs = np.random.randint(0, self.size, size=batch_size)
+        return (
+            self.views[idxs],
+            self.goals[idxs],
+            self.actions[idxs],
+            self.rewards[idxs],
+            self.next_views[idxs],
+            self.next_goals[idxs],
+            self.dones[idxs],
+        )
+
+    def __len__(self):
+        return self.size
+
+
 def optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler):
-    states, actions, rewards, next_states, dones = zip(*batch)
+    (
+        views_np,
+        goals_np,
+        actions_np,
+        rewards_np,
+        next_views_np,
+        next_goals_np,
+        dones_np,
+    ) = batch
 
     device = next(policy_net.parameters()).device
 
-    batch_size = len(states)
-    view_shape = states[0]["view"].shape
-    goal_shape = states[0]["goal_vector"].shape
+    views = torch.from_numpy(views_np).to(device, non_blocking=True)
+    goal_vecs = torch.from_numpy(goals_np).to(device, non_blocking=True)
+    actions = torch.from_numpy(actions_np).to(device, non_blocking=True).unsqueeze(1)
+    rewards = torch.from_numpy(rewards_np).to(device, non_blocking=True)
+    next_views = torch.from_numpy(next_views_np).to(device, non_blocking=True)
+    next_goal_vecs = torch.from_numpy(next_goals_np).to(device, non_blocking=True)
+    dones = torch.from_numpy(dones_np).to(device, non_blocking=True)
 
-    # 2. Alokujemy pamięć w NumPy (bardzo szybkie)
-    views_np = np.empty((batch_size, *view_shape), dtype=np.float32)
-    next_views_np = np.empty((batch_size, *view_shape), dtype=np.float32)
-    goals_np = np.empty((batch_size, *goal_shape), dtype=np.float32)
-    next_goals_np = np.empty((batch_size, *goal_shape), dtype=np.float32)
-
-    for i in range(batch_size):
-        views_np[i] = states[i]["view"]
-        next_views_np[i] = next_states[i]["view"]
-        goals_np[i] = states[i]["goal_vector"]
-        next_goals_np[i] = next_states[i]["goal_vector"]
-
-    # 4. Konwersja na sensory PyTorch
-    views = torch.as_tensor(views_np).to(device, non_blocking=True)
-    next_views = torch.as_tensor(next_views_np).to(device, non_blocking=True)
-    goal_vecs = torch.as_tensor(goals_np).to(device, non_blocking=True)
-    next_goal_vecs = torch.as_tensor(next_goals_np).to(device, non_blocking=True)
-
-    actions = (
-        torch.as_tensor(actions, dtype=torch.long)
-        .to(device, non_blocking=True)
-        .view(-1, 1)
-    )
-    rewards = torch.as_tensor(rewards, dtype=torch.float32).to(
-        device, non_blocking=True
-    )
-    dones = torch.as_tensor(dones, dtype=torch.float32).to(device, non_blocking=True)
-
-    with torch.amp.autocast("cuda"):
+    with torch.amp.autocast("cuda", enabled=(device.type == "cuda")):
         current_q_values = policy_net(views, goal_vecs).gather(1, actions)
 
         with torch.no_grad():
@@ -80,13 +110,17 @@ def optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler):
         loss = F.mse_loss(current_q_values, expected_q_values)
 
     optimizer.zero_grad(set_to_none=True)
-    scaler.scale(loss).backward()
 
-    scaler.unscale_(optimizer)
-    torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 1.0)
-
-    scaler.step(optimizer)
-    scaler.update()
+    if scaler is not None:
+        scaler.scale(loss).backward()
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 1.0)
+        scaler.step(optimizer)
+        scaler.update()
+    else:
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 1.0)
+        optimizer.step()
 
     return loss.item()
 
@@ -103,7 +137,7 @@ def train(
     epsilon: float = 1.0,
     epsilon_min: float = 0.01,
     epsilon_decay: float = 0.995,
-    epsilon_episodes: int = 500,
+    epsilon_episodes: int = math.inf,
 ):
     if out_model_name is None:
         out_model_name = (
@@ -128,12 +162,22 @@ def train(
         weights_dict = torch.load(path, map_location=device, weights_only=True)
         policy_net.load_state_dict(weights_dict)
     target_net.load_state_dict(policy_net.state_dict())
+
+    # if device.type == "cuda":
+    #     policy_net = torch.compile(policy_net)
+
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=1e-4)
     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
-    batch_size = 512
-    num_batches = 1
+
+    batch_size = 512 * 8
+    num_batches = 50
     update_episodes = 20
-    memory = ReplayBuffer(1000 * batch_size)
+
+    memory = EfficientReplayBuffer(
+        capacity=1000 * batch_size,
+        view_shape=vshape,
+        goal_shape=(2,),
+    )
 
     gamma = 0.99
     agent_brain = ActionAgent(
@@ -146,6 +190,7 @@ def train(
     completed_deliveries = [0] * num_episodes
     completion_steps = [env.step_limit] * num_episodes
 
+    tic = time.time()
     for episode in range(num_episodes):
         if episode > epsilon_episodes:
             agent_brain.epsilon = 0
@@ -161,12 +206,12 @@ def train(
 
             done = terminated or truncated
             if terminated:
-                print("SUCCESS ---")
+                print("SUCCESS", end="")
                 completed_deliveries[episode] = 1
                 completion_steps[episode] = env.step_count
 
             elif truncated:
-                print("TIMEOUT ---")
+                print("TIMEOUT", end="")
 
             for agent_id in obs.keys():
                 if agent_id in next_obs:
@@ -180,12 +225,11 @@ def train(
 
             obs = next_obs
 
-            if len(memory) > batch_size:
-                for _ in range(num_batches):
-                    batch = memory.sample(batch_size)
-                    optimize_model(
-                        batch, policy_net, target_net, optimizer, gamma, scaler
-                    )
+        for _ in range(num_batches):
+            batch = memory.sample(batch_size)
+            optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler)
+        print(f" {time.time() - tic:.2f}s ---")
+        tic = time.time()
 
         agent_brain.update_epsilon()
 
@@ -234,24 +278,25 @@ if __name__ == "__main__":
     print(f"Device: {device}")
     obs = [(1, 1), (3, 4)]
     env = MultiRobotGridEnv(
-        grid_size=(10, 10),
-        num_agents=8,
-        agent_view_size=5,
+        grid_size=(15, 15),
+        num_agents=15,
+        agent_view_size=7,
         step_limit=300,
         task_length=5,
         # obstacles=obs,
     )
     train(
-        num_episodes=50,
+        num_episodes=500,
         env=env,
         device=device,
-        out_model_name="CNN1+_8_5.pth",
-        in_model_name="CNN1_8_5.pth",
+        # out_model_name="CNN1+_8_5.pth",
+        # in_model_name="CNN1_8_5.pth",
         plot=True,
         save_data=False,
         model_class=CNN1,
-        epsilon=0,
-        epsilon_min=0,
-        epsilon_decay=0.995,
+        # epsilon=0,
+        # epsilon_min=0,
+        # epsilon_decay=0.995,
+        # epsilon_episodes=500
     )
     print("Done")
