@@ -11,7 +11,11 @@ from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
 from src.neural_networks.CNN.cnn import CNN1  # noqa: F401
 from src.neural_networks.DQN.dqn import DQNet1, DQNet2, DQNet3  # noqa: F401
-from src.utils.plots import save_avg_stepcount, save_completed_deliveries_plot
+from src.utils.plots import (
+    save_avg_stepcount,
+    save_completed_deliveries_plot,
+    save_stepcount,
+)
 
 
 class ReplayBuffer:
@@ -202,6 +206,8 @@ def train(
             filename=out_model_name,
             save_data=save_data,
             window_size=20,
+            start_eps=epsilon,
+            epsilon_decay=epsilon_decay,
         )
         save_avg_stepcount(
             completion_steps=completion_steps,
@@ -209,6 +215,16 @@ def train(
             filename=out_model_name,
             save_data=save_data,
             window_size=20,
+            start_eps=epsilon,
+            epsilon_decay=epsilon_decay,
+        )
+        save_stepcount(
+            completion_steps=completion_steps,
+            path=plot_path,
+            filename=out_model_name,
+            save_data=save_data,
+            start_eps=epsilon,
+            epsilon_decay=epsilon_decay,
         )
 
 

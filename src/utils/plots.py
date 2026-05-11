@@ -10,7 +10,10 @@ def save_completed_deliveries_plot(
     filename: str,
     save_data: bool = False,
     window_size: int = 20,
+    epsilon: float = None,
+    epsilon_decay: float = None,
 ):
+    filename = filename.removesuffix(".pth")
     path = path / f"{filename}_completed_deliveries_w{window_size}.png"
     n = len(completed_deliveries)
     completed_deliveries_sum = [0] * n
@@ -21,6 +24,9 @@ def save_completed_deliveries_plot(
     plt.figure(figsize=(10, 6))
     x = range(n)
     plt.plot(x, completed_deliveries_sum)
+    if epsilon is not None and epsilon_decay is not None:
+        y = [epsilon * (epsilon_decay**i) for i in x]
+        plt.plot(x, y, label="eps")
     plt.title(f"Completed deliveries in last {window_size} episodes")
     plt.xlabel("episode")
     plt.ylabel("deliveries")
@@ -37,7 +43,10 @@ def save_avg_stepcount(
     filename: str,
     save_data: bool = False,
     window_size: int = 20,
+    epsilon: float = None,
+    epsilon_decay: float = None,
 ):
+    filename = filename.removesuffix(".pth")
     path = path / f"{filename}_avg_completion_steps_w{window_size}.png"
     n = len(completion_steps)
     avg_stepcount_sum = [max(completion_steps)] * n
@@ -49,6 +58,9 @@ def save_avg_stepcount(
     plt.figure(figsize=(10, 6))
     x = range(n)
     plt.plot(x, avg_stepcount_sum)
+    if epsilon is not None and epsilon_decay is not None:
+        y = [epsilon * (epsilon_decay**i) for i in x]
+        plt.plot(x, y, label="eps")
     plt.title(f"Average stepcount in last {window_size} episodes")
     plt.xlabel("episode")
     plt.ylabel("stepcount")
@@ -56,3 +68,28 @@ def save_avg_stepcount(
     if save_data:
         txt_path = path.with_suffix(".txt")
         np.savetxt(txt_path, avg_stepcount_sum, fmt="%d")
+
+
+def save_stepcount(
+    completion_steps: list[int],
+    path: Path,
+    filename: str,
+    save_data: bool = False,
+    epsilon: float = None,
+    epsilon_decay: float = None,
+):
+    filename = filename.removesuffix(".pth")
+    path = path / f"{filename}_completion_steps.png"
+    plt.figure(figsize=(10, 6))
+    x = range(len(completion_steps))
+    plt.plot(x, completion_steps)
+    if epsilon is not None and epsilon_decay is not None:
+        y = [epsilon * (epsilon_decay**i) for i in x]
+        plt.plot(x, y, label="eps")
+    plt.title("Stepcount")
+    plt.xlabel("episode")
+    plt.ylabel("stepcount")
+    plt.savefig(path, dpi=300)
+    if save_data:
+        txt_path = path.with_suffix(".txt")
+        np.savetxt(txt_path, completion_steps, fmt="%d")
