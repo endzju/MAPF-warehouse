@@ -138,6 +138,7 @@ def train(
     epsilon_min: float = 0.01,
     epsilon_decay: float = 0.995,
     epsilon_episodes: int = math.inf,
+    lr=1e-4,
 ):
     if out_model_name is None:
         out_model_name = (
@@ -166,7 +167,7 @@ def train(
     # if device.type == "cuda":
     #     policy_net = torch.compile(policy_net)
 
-    optimizer = torch.optim.Adam(policy_net.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(policy_net.parameters(), lr=lr)
     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
 
     batch_size = 512 * 8
@@ -279,7 +280,7 @@ if __name__ == "__main__":
     obs = [(1, 1), (3, 4)]
     env = MultiRobotGridEnv(
         grid_size=(15, 15),
-        num_agents=15,
+        num_agents=3,
         agent_view_size=7,
         step_limit=300,
         task_length=5,

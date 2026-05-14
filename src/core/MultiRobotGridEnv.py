@@ -71,7 +71,7 @@ class MultiRobotGridEnv(gym.Env):
         )
 
         # Visualization
-        self.window_size = 800  # Rozmiar okna w pikselach
+        self.window_size = 700  # Rozmiar okna w pikselach
         self.cell_size = self.window_size // max(self.grid_width, self.grid_height)
         self.window = None
         self.clock = None
@@ -368,8 +368,9 @@ class MultiRobotGridEnv(gym.Env):
             pygame.draw.rect(canvas, (0, 0, 255), d_rect)
 
         # 3. Rysowanie Robotów i ich Celów
+        text_color = (0, 0, 0)
+
         for agent in self.agents:
-            text_color = (0, 0, 0)
             agent_id_str = f"ID:{agent.id}"
             # Cel (Małe kółko w kolorze agenta, ale przezroczyste/jasne)
             if agent.goal_pos:
@@ -394,6 +395,7 @@ class MultiRobotGridEnv(gym.Env):
                 goal_text = self.font.render(f"G:{agent.id}", True, text_color)
                 canvas.blit(goal_text, (pos_x, pos_y - 15))
 
+        for agent in self.agents:
             # 1. Pozycja
             pos_x = offset_x + agent.pos[0] * dynamic_cell_size
             pos_y = offset_y + agent.pos[1] * dynamic_cell_size

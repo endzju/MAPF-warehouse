@@ -39,8 +39,8 @@ def main(
 
         print(f"--- Krok: {total_step} ---")
         print(f"Nagrody: {rewards}")
-        for agent in env.agents:
-            print(f"{agent.id} {agent.task_type}", end=" ")
+        # for agent in env.agents:
+        #     print(f"{agent.id} {agent.task_type}", end=" ")
         print()
         env.render()
 
@@ -51,14 +51,21 @@ def main(
 
 if __name__ == "__main__":
     model_path = "CNN1+copy_8_5.pth"
+    # model_path = "DQNet2+_8_5.pth"
+    # env = MultiRobotGridEnv(
+    #     grid_size=(50, 50),
+    #     num_agents=50,
+    #     agent_view_size=5,
+    #     step_limit=5000,
+    # )
     env = MultiRobotGridEnv(
-        grid_size=(50, 50),
-        num_agents=50,
+        grid_size=(20, 20),
+        num_agents=30,
         agent_view_size=5,
         step_limit=5000,
     )
 
-    for i in range(50, 100):
+    for i in range(env.num_agents, 100):
         env.num_agents = i
         main(
             model_path=model_path,
