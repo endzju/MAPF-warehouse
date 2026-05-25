@@ -156,6 +156,14 @@ class MultiRobotGridEnv(gym.Env):
 
         for agent in agent_list:
             if agent.id in actions:
+                if agent.is_stuck():
+                    random_move = self.np_random.choice(4)
+                    next_pos = self._next_pos(agent, random_move)
+                    rewards[agent.id] = 0
+                    if next_pos in empty_cells:
+                        agent.set_next_pos(next_pos)
+                        empty_cells.remove(next_pos)
+
                 next_pos = self._next_pos(agent, actions[agent.id])
                 if next_pos in empty_cells:
                     rewards[agent.id] = agent.reward(next_pos, empty_cells)
@@ -272,6 +280,9 @@ class MultiRobotGridEnv(gym.Env):
             "goal_vector": goal_vector,
             "aditional_info": 0,
         }
+
+    def _avg_manhattan_distance(self) -> float:
+        pass
 
     def render_as_text(self, mode="human") -> str:
         grid = np.full((self.grid_width, self.grid_height), ".", dtype=str)

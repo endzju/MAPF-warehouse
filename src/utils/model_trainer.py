@@ -279,9 +279,9 @@ if __name__ == "__main__":
     print(f"Device: {device}")
     obs = [(1, 1), (3, 4)]
     env = MultiRobotGridEnv(
-        grid_size=(15, 15),
-        num_agents=3,
-        agent_view_size=7,
+        grid_size=(25, 25),
+        num_agents=25,
+        agent_view_size=5,
         step_limit=300,
         task_length=5,
         # obstacles=obs,

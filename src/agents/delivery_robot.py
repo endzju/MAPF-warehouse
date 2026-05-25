@@ -1,3 +1,4 @@
+from collections import deque
 from typing import TYPE_CHECKING
 
 from src.agents.task import Task
@@ -24,6 +25,7 @@ class DeliveryRobot:
         self.goal_pos = task.goals[0]
         self.task_type = task.goalTypes[0]
         self.next_pos = None
+        self.pos_history = deque(maxlen=10)
         self.idle_time = 0
         self._next_task()
 
@@ -31,24 +33,38 @@ class DeliveryRobot:
         """
         Returns True if robot should be removed
         """
+
+        # wait if idle
         if self.idle_time > 0:
             self.idle_time = max(0, self.idle_time - 1)
             return False
 
+        # leave if on depot
         if self.task_type == TaskType.LEAVE and self.pos == self.depot.pos:
             self.depot.stored_agents.append(self)
             return True
 
-        if self.next_pos:
-            self.pos = self.next_pos
-            self.next_pos = None
+        # move
+        self.move()
 
+        # finish task and set idle time
         if self.pos == self.goal_pos:
             self.idle_time = 1
             self._next_task()
             return False
 
         return False
+
+    def move(self):
+        if self.next_pos:
+            self.pos_history.append(self.pos)
+            self.pos = self.next_pos
+            self.next_pos = None
+
+    def is_stuck(self) -> bool:
+        if len(self.pos_history) < self.pos_history.maxlen:
+            return False
+        return len(set(self.pos_history)) == 2
 
     def reward(self, next_pos: tuple[int, int], empty_cells: set[tuple[int, int]]):
         reward = -1
