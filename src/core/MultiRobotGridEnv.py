@@ -8,6 +8,7 @@ from gymnasium import spaces
 from src.agents.delivery_robot import DeliveryRobot
 from src.agents.depot import Depot
 from src.agents.task import Task
+from src.utils.distance import manhattan_distance
 from src.utils.enums import TaskType
 
 
@@ -30,6 +31,9 @@ class MultiRobotGridEnv(gym.Env):
         self.obstacle_set = set()
         self.agent_view_size = agent_view_size
         self.agents: set[DeliveryRobot] = set()
+        self.avg_manhattan_distance = 0
+        self.avg_delivery_time = 0
+        self.deliveries = 0
 
         if obstacles:
             obs = np.array(obstacles, dtype=np.uint8)
@@ -77,6 +81,7 @@ class MultiRobotGridEnv(gym.Env):
         self.clock = None
         pygame.font.init()
         self.font = pygame.font.SysFont("Arial", 18)
+        self.info_font = pygame.font.SysFont("Arial", 22)
 
     def _depot_positions(self) -> set[tuple[int, int]]:
         return {depot.pos for depot in self.depots}
@@ -99,6 +104,9 @@ class MultiRobotGridEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         self.step_count = 0
+        self.avg_manhattan_distance = 0
+        self.avg_delivery_time = 0
+        self.deliveries = 0
         super().reset(seed=seed)
         self._calc_padded_obstacle_grid()
         self.agents.clear()
@@ -117,10 +125,8 @@ class MultiRobotGridEnv(gym.Env):
 
         for i, (agent_i, goal_indices) in enumerate(zip(agent_indices, goals)):
             agent_pos = empty_cells[agent_i]
-            goal_positions = [empty_cells[goal_i] for goal_i in goal_indices] + [
-                self.depots[0].pos
-            ]
-            task_types = [TaskType.PICKUP] * len(goal_indices) + [TaskType.LEAVE]
+            goal_positions = [empty_cells[goal_i] for goal_i in goal_indices]
+            task_types = [TaskType.PICKUP] * len(goal_indices)
             task = Task(goal_positions, task_types, id=i)
             robot = DeliveryRobot(
                 position=agent_pos, task=task, depot=self.depots[0], id=i
@@ -128,6 +134,7 @@ class MultiRobotGridEnv(gym.Env):
             self.agents.add(robot)
             observations[robot.id] = self._get_obs(robot)
 
+        self.avg_manhattan_distance = self._avg_manhattan_distance()
         return observations, {}
 
     def _next_pos(self, agent: DeliveryRobot, action: int) -> tuple[int, int]:
@@ -177,6 +184,10 @@ class MultiRobotGridEnv(gym.Env):
         for agent in self.agents:
             if agent.step():
                 remove_agents.add(agent)
+                self.avg_delivery_time = (
+                    self.avg_delivery_time * self.deliveries + agent.step_count
+                ) / (self.deliveries + 1)
+                self.deliveries += 1
             elif not agent.is_idle() and not agent.is_done():
                 observations[agent.id] = self._get_obs(agent)
 
@@ -282,7 +293,16 @@ class MultiRobotGridEnv(gym.Env):
         }
 
     def _avg_manhattan_distance(self) -> float:
-        pass
+        distance_list = []
+        for agent in self.agents:
+            goals = agent.task.goals + [agent.depot.pos]
+            distance = 0
+            for i in range(len(goals) - 1):
+                distance += manhattan_distance(goals[i], goals[i + 1])
+                distance += agent.finish_times[agent.task.goalTypes[i]]
+            distance_list.append(distance)
+        total_distance = sum(distance_list)
+        return total_distance / len(self.agents)
 
     def render_as_text(self, mode="human") -> str:
         grid = np.full((self.grid_width, self.grid_height), ".", dtype=str)
@@ -312,7 +332,7 @@ class MultiRobotGridEnv(gym.Env):
             pygame.init()
             pygame.display.init()
             self.window = pygame.display.set_mode(
-                (self.window_size, self.window_size), pygame.RESIZABLE
+                (self.window_size * 2, self.window_size), pygame.RESIZABLE
             )
             pygame.display.set_caption("Multi-Robot Delivery Grid")
             images_path = Path(__file__).parent.parent / "assets" / "images"
@@ -348,7 +368,7 @@ class MultiRobotGridEnv(gym.Env):
         grid_total_height = self.grid_height * dynamic_cell_size
 
         # Obliczamy marginesy, aby wyśrodkować siatkę
-        offset_x = (current_w - grid_total_width) // 2
+        offset_x = (current_w - grid_total_width) // 4
         offset_y = (current_h - grid_total_height) // 2
 
         # 1. Rysowanie siatki i przeszkód
@@ -429,6 +449,17 @@ class MultiRobotGridEnv(gym.Env):
             agent_id_str = f"ID:{agent.id}"
             agent_text = self.font.render(agent_id_str, True, (0, 0, 0))
             canvas.blit(agent_text, (pos_x, pos_y - 15))
+
+        text = f"Avg Manhattan Distance: {self.avg_manhattan_distance:.2f}"
+        rendered_text = self.info_font.render(text, True, (0, 0, 0))
+        canvas.blit(rendered_text, (current_w - 300, 20))
+
+        delivery_text = (
+            f"{self.avg_delivery_time:.2f}" if self.avg_delivery_time else "N/A"
+        )
+        text = f"Avg Delivery time: {delivery_text}"
+        rendered_text = self.info_font.render(text, True, (0, 0, 0))
+        canvas.blit(rendered_text, (current_w - 300, 40))
 
         # Wyświetlenie na ekranie
         self.window.blit(canvas, canvas.get_rect())

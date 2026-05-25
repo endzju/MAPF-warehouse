@@ -2,6 +2,7 @@ from collections import deque
 from typing import TYPE_CHECKING
 
 from src.agents.task import Task
+from src.utils.depot_queue import DepotQueue
 from src.utils.enums import TaskType
 
 if TYPE_CHECKING:
@@ -15,12 +16,16 @@ class DeliveryRobot:
         task: Task,
         depot: "Depot",
         id: int = -1,
+        finish_times: dict[TaskType, int] = {TaskType.PICKUP: 1, TaskType.LEAVE: 1},
     ):
         self.pos = position
         self.task = task
         self.depot: Depot = depot
         self.id = id
         self.was_blocked = False
+        self.depot_queue = DepotQueue(self.depot.pos)
+        self.finish_times = finish_times
+        self.step_count = 0
 
         self.goal_pos = task.goals[0]
         self.task_type = task.goalTypes[0]
@@ -33,6 +38,8 @@ class DeliveryRobot:
         """
         Returns True if robot should be removed
         """
+        # update step count
+        self.step_count += 1
 
         # wait if idle
         if self.idle_time > 0:
@@ -49,9 +56,8 @@ class DeliveryRobot:
 
         # finish task and set idle time
         if self.pos == self.goal_pos:
-            self.idle_time = 1
+            self.finish_goal()
             self._next_task()
-            return False
 
         return False
 
@@ -60,6 +66,9 @@ class DeliveryRobot:
             self.pos_history.append(self.pos)
             self.pos = self.next_pos
             self.next_pos = None
+
+    def finish_goal(self):
+        self.idle_time = self.finish_times[self.task_type]
 
     def is_stuck(self) -> bool:
         if len(self.pos_history) < self.pos_history.maxlen:
@@ -109,7 +118,7 @@ class DeliveryRobot:
 
     def _next_task(self) -> None:
         if len(self.task.goals) == 0:
-            self.goal_pos, self.task_type = None, TaskType.LEAVE
+            self.goal_pos, self.task_type = self.depot.pos, TaskType.LEAVE
             return
         self.goal_pos, self.task_type = self.task.pop_next()
 
