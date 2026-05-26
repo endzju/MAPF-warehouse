@@ -8,7 +8,7 @@ def save_completed_deliveries_plot(
     completed_deliveries: list[int],
     path: Path,
     filename: str,
-    save_data: bool = False,
+    save_plot_data: bool = False,
     window_size: int = 20,
     start_eps: float = None,
     epsilon_decay: float = None,
@@ -32,7 +32,7 @@ def save_completed_deliveries_plot(
     plt.ylabel("deliveries")
     plt.savefig(path, dpi=300)
 
-    if save_data:
+    if save_plot_data:
         txt_path = path.with_suffix(".txt")
         np.savetxt(txt_path, completed_deliveries_sum, fmt="%d")
 
@@ -41,7 +41,7 @@ def save_avg_stepcount(
     completion_steps: list[int],
     path: Path,
     filename: str,
-    save_data: bool = False,
+    save_plot_data: bool = False,
     window_size: int = 20,
     start_eps: float = None,
     epsilon_decay: float = None,
@@ -65,7 +65,7 @@ def save_avg_stepcount(
     plt.xlabel("episode")
     plt.ylabel("stepcount")
     plt.savefig(path, dpi=300)
-    if save_data:
+    if save_plot_data:
         txt_path = path.with_suffix(".txt")
         np.savetxt(txt_path, avg_stepcount_sum, fmt="%d")
 
@@ -74,7 +74,7 @@ def save_stepcount(
     completion_steps: list[int],
     path: Path,
     filename: str,
-    save_data: bool = False,
+    save_plot_data: bool = False,
     start_eps: float = None,
     epsilon_decay: float = None,
 ):
@@ -90,6 +90,6 @@ def save_stepcount(
     plt.xlabel("episode")
     plt.ylabel("stepcount")
     plt.savefig(path, dpi=300)
-    if save_data:
+    if save_plot_data:
         txt_path = path.with_suffix(".txt")
         np.savetxt(txt_path, completion_steps, fmt="%d")

@@ -1,38 +1,56 @@
 from collections import deque
-from typing import TYPE_CHECKING
+from itertools import islice
 
+# if TYPE_CHECKING:
+from src.agents.depot import Depot
 from src.agents.task import Task
-from src.utils.depot_queue import DepotQueue
 from src.utils.enums import TaskType
-
-if TYPE_CHECKING:
-    from src.agents.depot import Depot
 
 
 class DeliveryRobot:
+    pos: tuple[int, int]
+    task: Task
+    depot: Depot
+
+    id: int
+    was_blocked: bool
+
+    finish_times: dict[TaskType, int]
+
+    step_count: int
+
+    goal_pos: tuple[int, int] | None
+    task_type: TaskType | None
+
+    next_pos: tuple[int, int] | None
+
+    pos_history: deque[tuple[int, int]]
+
+    idle_time: int
+
     def __init__(
         self,
         position: tuple[int, int],
         task: Task,
-        depot: "Depot",
-        id: int = -1,
-        finish_times: dict[TaskType, int] = {TaskType.PICKUP: 1, TaskType.LEAVE: 1},
+        depot: Depot,
+        id: int,
+        finish_times: dict[TaskType, int] | None = None,
     ):
         self.pos = position
         self.task = task
-        self.depot: Depot = depot
+        self.depot = depot
         self.id = id
         self.was_blocked = False
-        self.depot_queue = DepotQueue(self.depot.pos)
-        self.finish_times = finish_times
-        self.step_count = 0
+        self.finish_times = finish_times or {
+            TaskType.PICKUP: 1,
+            TaskType.LEAVE: 1,
+        }
+        self.step_count: int = 0
 
-        self.goal_pos = task.goals[0]
-        self.task_type = task.goalTypes[0]
+        self.goal_pos, self.task_type = self.task.pop_next()
         self.next_pos = None
-        self.pos_history = deque(maxlen=10)
+        self.pos_history = deque()
         self.idle_time = 0
-        self._next_task()
 
     def step(self) -> bool:
         """
@@ -62,18 +80,23 @@ class DeliveryRobot:
         return False
 
     def move(self):
+        self.pos_history.append(self.pos)
         if self.next_pos:
-            self.pos_history.append(self.pos)
             self.pos = self.next_pos
             self.next_pos = None
 
     def finish_goal(self):
-        self.idle_time = self.finish_times[self.task_type]
+        if self.task_type == TaskType.LEAVE:
+            self.idle_time = self.finish_times[self.task_type] - 1
+        else:
+            self.idle_time = self.finish_times[self.task_type]
 
     def is_stuck(self) -> bool:
-        if len(self.pos_history) < self.pos_history.maxlen:
+        if len(self.pos_history) < 10:
             return False
-        return len(set(self.pos_history)) == 2
+        recent_positions = islice(reversed(self.pos_history), 10)
+        unique_positions = set(recent_positions)
+        return len(unique_positions) <= 2
 
     def reward(self, next_pos: tuple[int, int], empty_cells: set[tuple[int, int]]):
         reward = -1
@@ -117,7 +140,8 @@ class DeliveryRobot:
         return self.idle_time > 0
 
     def _next_task(self) -> None:
-        if len(self.task.goals) == 0:
+        if self.task.is_completed():
+            print("IMPLICIT LEAVE")
             self.goal_pos, self.task_type = self.depot.pos, TaskType.LEAVE
             return
         self.goal_pos, self.task_type = self.task.pop_next()

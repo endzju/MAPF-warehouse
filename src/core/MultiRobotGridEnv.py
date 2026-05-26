@@ -1,8 +1,8 @@
+import ctypes
 from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
-import pygame
 from gymnasium import spaces
 
 from src.agents.delivery_robot import DeliveryRobot
@@ -10,6 +10,10 @@ from src.agents.depot import Depot
 from src.agents.task import Task
 from src.utils.distance import manhattan_distance
 from src.utils.enums import TaskType
+
+ctypes.windll.shcore.SetProcessDpiAwareness(1)
+
+import pygame  # noqa: E402
 
 
 class MultiRobotGridEnv(gym.Env):
@@ -22,6 +26,7 @@ class MultiRobotGridEnv(gym.Env):
         depots: list[Depot] = [Depot((0, 0))],
         step_limit: int = 100,
         task_length: int = 5,
+        finish_times: dict[TaskType, int] = {TaskType.PICKUP: 1, TaskType.LEAVE: 1},
     ):
         super(MultiRobotGridEnv, self).__init__()
         self.grid_width, self.grid_height = grid_size
@@ -34,6 +39,7 @@ class MultiRobotGridEnv(gym.Env):
         self.avg_manhattan_distance = 0
         self.avg_delivery_time = 0
         self.deliveries = 0
+        self.finish_times = finish_times
 
         if obstacles:
             obs = np.array(obstacles, dtype=np.uint8)
@@ -75,13 +81,15 @@ class MultiRobotGridEnv(gym.Env):
         )
 
         # Visualization
-        self.window_size = 700  # Rozmiar okna w pikselach
+        self.window_size = 900  # Rozmiar okna w pikselach
         self.cell_size = self.window_size // max(self.grid_width, self.grid_height)
         self.window = None
         self.clock = None
+        self.path_length = 20
         pygame.font.init()
         self.font = pygame.font.SysFont("Arial", 18)
         self.info_font = pygame.font.SysFont("Arial", 22)
+        self.alert_font = pygame.font.SysFont("Arial", 32)
 
     def _depot_positions(self) -> set[tuple[int, int]]:
         return {depot.pos for depot in self.depots}
@@ -125,11 +133,17 @@ class MultiRobotGridEnv(gym.Env):
 
         for i, (agent_i, goal_indices) in enumerate(zip(agent_indices, goals)):
             agent_pos = empty_cells[agent_i]
-            goal_positions = [empty_cells[goal_i] for goal_i in goal_indices]
-            task_types = [TaskType.PICKUP] * len(goal_indices)
+            goal_positions = [empty_cells[goal_i] for goal_i in goal_indices] + [
+                self.depots[0].pos
+            ]
+            task_types = [TaskType.PICKUP] * len(goal_indices) + [TaskType.LEAVE]
             task = Task(goal_positions, task_types, id=i)
             robot = DeliveryRobot(
-                position=agent_pos, task=task, depot=self.depots[0], id=i
+                position=agent_pos,
+                task=task,
+                depot=self.depots[0],
+                id=i,
+                finish_times=self.finish_times,
             )
             self.agents.add(robot)
             observations[robot.id] = self._get_obs(robot)
@@ -164,12 +178,14 @@ class MultiRobotGridEnv(gym.Env):
         for agent in agent_list:
             if agent.id in actions:
                 if agent.is_stuck():
+                    print("STUCK")
                     random_move = self.np_random.choice(4)
                     next_pos = self._next_pos(agent, random_move)
                     rewards[agent.id] = 0
                     if next_pos in empty_cells:
                         agent.set_next_pos(next_pos)
                         empty_cells.remove(next_pos)
+                    continue
 
                 next_pos = self._next_pos(agent, actions[agent.id])
                 if next_pos in empty_cells:
@@ -188,10 +204,12 @@ class MultiRobotGridEnv(gym.Env):
                     self.avg_delivery_time * self.deliveries + agent.step_count
                 ) / (self.deliveries + 1)
                 self.deliveries += 1
-            elif not agent.is_idle() and not agent.is_done():
-                observations[agent.id] = self._get_obs(agent)
 
         self.agents.difference_update(remove_agents)
+
+        for agent in self.agents:
+            if not agent.is_idle() and not agent.is_done():
+                observations[agent.id] = self._get_obs(agent)
 
         truncated = self.step_count >= self.step_limit
         terminated = len(self.agents) == 0
@@ -295,12 +313,20 @@ class MultiRobotGridEnv(gym.Env):
     def _avg_manhattan_distance(self) -> float:
         distance_list = []
         for agent in self.agents:
-            goals = agent.task.goals + [agent.depot.pos]
+            goals = [agent.pos] + agent.task.goals
             distance = 0
             for i in range(len(goals) - 1):
                 distance += manhattan_distance(goals[i], goals[i + 1])
                 distance += agent.finish_times[agent.task.goalTypes[i]]
             distance_list.append(distance)
+
+        # include waiting in queue to depot
+        distance_list.sort()
+        min_dist = distance_list[0]
+        for i in range(len(distance_list)):
+            distance_list[i] = max(min_dist, distance_list[i])
+            # time for leaving + 1 for robot removing time
+            min_dist = distance_list[i] + 1 + self.finish_times[TaskType.LEAVE]
         total_distance = sum(distance_list)
         return total_distance / len(self.agents)
 
@@ -327,7 +353,39 @@ class MultiRobotGridEnv(gym.Env):
             out += " ".join(row) + "\n"
         return out
 
-    def render(self):
+    def handle_events(self):
+        events = pygame.event.get()
+
+        quit_requested = False
+        pause_pressed = False
+
+        for event in events:
+            if event.type == pygame.QUIT:
+                quit_requested = True
+
+            elif event.type == pygame.VIDEORESIZE:
+                self.window = pygame.display.set_mode(
+                    (event.w, event.h),
+                    pygame.RESIZABLE,
+                )
+
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    pause_pressed = True
+                if event.key == pygame.K_EQUALS:
+                    self.path_length += 1
+                if event.key == pygame.K_MINUS:
+                    self.path_length -= 1
+
+            elif event.type == pygame.MOUSEWHEEL:
+                if event.y > 0:
+                    self.path_length += 1
+                elif event.y < 0:
+                    self.path_length -= 1
+
+        return quit_requested, pause_pressed
+
+    def render(self, paused=False):
         if self.window is None:
             pygame.init()
             pygame.display.init()
@@ -346,15 +404,6 @@ class MultiRobotGridEnv(gym.Env):
 
         if self.clock is None:
             self.clock = pygame.time.Clock()
-
-        canvas = pygame.Surface((self.window_size, self.window_size))
-        canvas.fill((255, 255, 255))  # Białe tło
-        for event in pygame.event.get():
-            if event.type == pygame.VIDEORESIZE:
-                # Aktualizacja rozmiaru okna i powierzchni
-                self.window = pygame.display.set_mode(
-                    (event.w, event.h), pygame.RESIZABLE
-                )
 
         current_w, current_h = self.window.get_size()
         canvas = pygame.Surface((current_w, current_h))
@@ -401,9 +450,9 @@ class MultiRobotGridEnv(gym.Env):
         # 3. Rysowanie Robotów i ich Celów
         text_color = (0, 0, 0)
 
+        # Drawing packages and depots
         for agent in self.agents:
             agent_id_str = f"ID:{agent.id}"
-            # Cel (Małe kółko w kolorze agenta, ale przezroczyste/jasne)
             if agent.goal_pos:
                 pos_x = offset_x + agent.goal_pos[0] * dynamic_cell_size
                 pos_y = offset_y + agent.goal_pos[1] * dynamic_cell_size
@@ -426,50 +475,199 @@ class MultiRobotGridEnv(gym.Env):
                 goal_text = self.font.render(f"G:{agent.id}", True, text_color)
                 canvas.blit(goal_text, (pos_x, pos_y - 15))
 
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        hovered_agent = None
+
+        # Drawing robots
         for agent in self.agents:
-            # 1. Pozycja
             pos_x = offset_x + agent.pos[0] * dynamic_cell_size
             pos_y = offset_y + agent.pos[1] * dynamic_cell_size
 
-            # 2. Skalowanie
+            robot_rect = pygame.Rect(
+                pos_x,
+                pos_y,
+                dynamic_cell_size,
+                dynamic_cell_size,
+            )
+
+            if robot_rect.collidepoint(mouse_x, mouse_y):
+                hovered_agent = agent
+
             robot_scaled = pygame.transform.scale(
                 self.robot_img, (dynamic_cell_size, dynamic_cell_size)
             )
 
-            # 3. Kolorowanie (opcjonalnie, jeśli obrazek jest biały)
             r = ((agent.id + 1) * 50) % 256
             g = ((agent.id + 1) * 80) % 256
             b = ((agent.id + 1) * 110) % 256
             robot_scaled.fill((r, g, b, 255), special_flags=pygame.BLEND_RGBA_MULT)
 
-            # 4. Wyświetlenie
             canvas.blit(robot_scaled, (pos_x, pos_y))
 
-            # 5. Tekst ID (centrowanie napisu nad robotem)
             agent_id_str = f"ID:{agent.id}"
             agent_text = self.font.render(agent_id_str, True, (0, 0, 0))
             canvas.blit(agent_text, (pos_x, pos_y - 15))
 
         text = f"Avg Manhattan Distance: {self.avg_manhattan_distance:.2f}"
         rendered_text = self.info_font.render(text, True, (0, 0, 0))
-        canvas.blit(rendered_text, (current_w - 300, 20))
+        canvas.blit(rendered_text, (current_w - 350, 20))
 
         delivery_text = (
             f"{self.avg_delivery_time:.2f}" if self.avg_delivery_time else "N/A"
         )
         text = f"Avg Delivery time: {delivery_text}"
         rendered_text = self.info_font.render(text, True, (0, 0, 0))
-        canvas.blit(rendered_text, (current_w - 300, 40))
+        canvas.blit(rendered_text, (current_w - 350, 50))
+        if paused:
+            text = "PAUSED"
+            rendered_text = self.alert_font.render(text, True, (200, 0, 0))
+            canvas.blit(rendered_text, (current_w - 200, current_h - 100))
+
+        path_surface = pygame.Surface(
+            (current_w, current_h),
+            pygame.SRCALPHA,
+        )
+
+        if hovered_agent is not None:
+            r = ((hovered_agent.id + 1) * 50) % 256
+            g = ((hovered_agent.id + 1) * 80) % 256
+            b = ((hovered_agent.id + 1) * 110) % 256
+            line_width = 10
+
+            path = list(hovered_agent.pos_history) + [hovered_agent.pos]
+            path = path[-self.path_length :]
+            completed_goals = list(hovered_agent.task.get_delivered_goals())
+            points = []
+            completed_points = []
+
+            for x, y in path:
+                px = offset_x + x * dynamic_cell_size + dynamic_cell_size // 2
+                py = offset_y + y * dynamic_cell_size + dynamic_cell_size // 2
+                points.append((px, py))
+
+            for x, y in completed_goals:
+                px = offset_x + x * dynamic_cell_size + dynamic_cell_size // 2
+                py = offset_y + y * dynamic_cell_size + dynamic_cell_size // 2
+                completed_points.append((px, py))
+
+            if len(points) >= 2:
+                num_segments = len(points) - 1
+
+                last_side = None
+                cell_offset = dynamic_cell_size // 4
+
+                entry_offset_dict = {
+                    0: (cell_offset, cell_offset),
+                    1: (cell_offset, -cell_offset),
+                    2: (-cell_offset, -cell_offset),
+                    3: (-cell_offset, cell_offset),
+                }
+
+                for i in range(num_segments):
+                    start = points[i]
+                    end = points[i + 1]
+                    idx_start = path[i]
+                    idx_end = path[i + 1]
+
+                    dx = idx_end[0] - idx_start[0]
+                    dy = idx_end[1] - idx_start[1]
+
+                    alpha = int(255 * (i + 1) / num_segments)
+                    segment_color = (r, g, b, alpha)
+
+                    # right
+                    if dx > 0:
+                        start_rightsided = (
+                            start[0] + cell_offset,
+                            start[1] + cell_offset,
+                        )
+                        end_rightsided = (
+                            end[0] - cell_offset,
+                            end[1] + cell_offset,
+                        )
+                        cur_side = 0
+                    # up
+                    elif dy < 0:
+                        start_rightsided = (
+                            start[0] + cell_offset,
+                            start[1] - cell_offset,
+                        )
+                        end_rightsided = (
+                            end[0] + cell_offset,
+                            end[1] + cell_offset,
+                        )
+                        cur_side = 1
+                    # left
+                    elif dx < 0:
+                        start_rightsided = (
+                            start[0] - cell_offset,
+                            start[1] - cell_offset,
+                        )
+                        end_rightsided = (
+                            end[0] + cell_offset,
+                            end[1] - cell_offset,
+                        )
+                        cur_side = 2
+                    # down
+                    elif dy > 0:
+                        start_rightsided = (
+                            start[0] - cell_offset,
+                            start[1] + cell_offset,
+                        )
+                        end_rightsided = (
+                            end[0] - cell_offset,
+                            end[1] - cell_offset,
+                        )
+                        cur_side = 3
+
+                    if dx == 0 and dy == 0:
+                        continue
+
+                    if last_side is not None and last_side != cur_side:
+                        while last_side != cur_side:
+                            start_draw = (
+                                start[0] + entry_offset_dict[last_side][0],
+                                start[1] + entry_offset_dict[last_side][1],
+                            )
+                            last_side = (last_side + 1) % 4
+                            end_draw = (
+                                start[0] + entry_offset_dict[last_side][0],
+                                start[1] + entry_offset_dict[last_side][1],
+                            )
+
+                            pygame.draw.line(
+                                path_surface,
+                                segment_color,
+                                start_draw,
+                                end_draw,
+                                line_width,
+                            )
+
+                    last_side = (cur_side - 1) % 4
+
+                    pygame.draw.line(
+                        path_surface,
+                        segment_color,
+                        start_rightsided,
+                        end_rightsided,
+                        line_width,
+                    )
+
+                for point in completed_points:
+                    pygame.draw.circle(path_surface, (255, 215, 0), point, line_width)
 
         # Wyświetlenie na ekranie
+        canvas.blit(path_surface, (0, 0))
         self.window.blit(canvas, canvas.get_rect())
-        pygame.event.pump()
-        pygame.display.update()
+        pygame.display.flip()
 
         # Ograniczenie FPS (np. 10 klatek na sekundę)
-        self.clock.tick(10)
+        self.clock.tick(20)
 
     def close(self):
         if self.window is not None:
             pygame.display.quit()
             pygame.quit()
+
+            self.window = None
+            self.clock = None

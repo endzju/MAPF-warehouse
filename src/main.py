@@ -17,12 +17,27 @@ def main(
         model_path += ".pth"
 
     observations, info = env.reset()
+    env.render()
 
     terminated = False
     truncated = False
     total_step = 0
+    paused = False
 
     while not (terminated or truncated):
+        quit_requested, pause_pressed = env.handle_events()
+
+        if quit_requested:
+            break
+
+        if pause_pressed:
+            paused = not paused
+
+        if paused:
+            env.render(paused=True)
+            time.sleep(0.1)
+            continue
+
         # 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT, 4=WAIT
         model = load_model(model_path, model_class=model_class)
         model.eval()
@@ -36,22 +51,18 @@ def main(
         observations, rewards, terminated, truncated, info = env.step(actions)
 
         total_step += 1
-
-        print(f"--- Krok: {total_step} ---")
-        print(f"Nagrody: {rewards}")
-        # for agent in env.agents:
-        #     print(f"{agent.id} {agent.task_type}", end=" ")
-        print()
         env.render()
 
         time.sleep(0.1)
 
     print("Symulacja zakończona")
+    time.sleep(1)
 
 
 if __name__ == "__main__":
     model_path = "CNN1+copy_8_5.pth"
     # model_path = "DQNet2+_8_5.pth"
+    model_path = "CNN1_30_5.pth"
     # env = MultiRobotGridEnv(
     #     grid_size=(50, 50),
     #     num_agents=50,
@@ -64,11 +75,14 @@ if __name__ == "__main__":
         agent_view_size=5,
         step_limit=5000,
     )
-
-    for i in range(env.num_agents, 100):
-        env.num_agents = i
-        main(
-            model_path=model_path,
-            env=env,
-            model_class=CNN1,
-        )
+    try:
+        for i in range(env.num_agents, 100):
+            env.num_agents = i
+            main(
+                model_path=model_path,
+                env=env,
+                model_class=CNN1,
+            )
+    except KeyboardInterrupt:
+        env.close()
+        print("Przerwano program")
