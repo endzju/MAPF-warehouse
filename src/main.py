@@ -11,13 +11,15 @@ def main(
     model_path="DQN_model_5.pth",
     env: MultiRobotGridEnv = None,
     model_class: DQNet1 | DQNet2 | DQNet3 = DQNet1,
+    render=True,
 ):
 
     if ".pth" not in model_path:
         model_path += ".pth"
 
     observations, info = env.reset()
-    env.render()
+    if render:
+        env.render()
 
     terminated = False
     truncated = False
@@ -33,7 +35,7 @@ def main(
         if pause_pressed:
             paused = not paused
 
-        if paused:
+        if paused and render:
             env.render(paused=True)
             time.sleep(0.1)
             continue
@@ -51,12 +53,13 @@ def main(
         observations, rewards, terminated, truncated, info = env.step(actions)
 
         total_step += 1
-        env.render()
-
-        time.sleep(0.1)
+        if render:
+            env.render()
+            time.sleep(0.1)
 
     print("Symulacja zakończona")
     time.sleep(1)
+    return env.avg_manhattan_distance, env.avg_delivery_time
 
 
 if __name__ == "__main__":
@@ -75,14 +78,21 @@ if __name__ == "__main__":
         agent_view_size=5,
         step_limit=5000,
     )
+
+    total_manhatan_delivery_time = 0
+    total_delivery_time = 0
     try:
-        for i in range(env.num_agents, 100):
-            env.num_agents = i
-            main(
+        for i in range(10):
+            manhatan_delivery_time, delivery_time = main(
                 model_path=model_path,
                 env=env,
                 model_class=CNN1,
             )
+            total_manhatan_delivery_time += manhatan_delivery_time
+            total_delivery_time += delivery_time
     except KeyboardInterrupt:
         env.close()
         print("Przerwano program")
+
+    print(f"Avarage manhatan delivery time: {total_manhatan_delivery_time / 10}")
+    print(f"Avarage delivery time: {total_delivery_time / 10}")

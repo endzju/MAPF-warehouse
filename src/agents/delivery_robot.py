@@ -92,9 +92,10 @@ class DeliveryRobot:
             self.idle_time = self.finish_times[self.task_type]
 
     def is_stuck(self) -> bool:
-        if len(self.pos_history) < 10:
+        stuck_time = 5
+        if len(self.pos_history) < stuck_time:
             return False
-        recent_positions = islice(reversed(self.pos_history), 10)
+        recent_positions = islice(reversed(self.pos_history), stuck_time)
         unique_positions = set(recent_positions)
         return len(unique_positions) <= 2
 
@@ -141,8 +142,8 @@ class DeliveryRobot:
 
     def _next_task(self) -> None:
         if self.task.is_completed():
-            print("IMPLICIT LEAVE")
-            self.goal_pos, self.task_type = self.depot.pos, TaskType.LEAVE
+            # print("IMPLICIT LEAVE")
+            # self.goal_pos, self.task_type = self.depot.pos, TaskType.LEAVE
             return
         self.goal_pos, self.task_type = self.task.pop_next()
 

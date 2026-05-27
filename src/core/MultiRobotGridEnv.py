@@ -178,7 +178,6 @@ class MultiRobotGridEnv(gym.Env):
         for agent in agent_list:
             if agent.id in actions:
                 if agent.is_stuck():
-                    print("STUCK")
                     random_move = self.np_random.choice(4)
                     next_pos = self._next_pos(agent, random_move)
                     rewards[agent.id] = 0
@@ -373,15 +372,15 @@ class MultiRobotGridEnv(gym.Env):
                 if event.key == pygame.K_SPACE:
                     pause_pressed = True
                 if event.key == pygame.K_EQUALS:
-                    self.path_length += 1
+                    self.path_length += 10
                 if event.key == pygame.K_MINUS:
-                    self.path_length -= 1
+                    self.path_length -= 10
 
             elif event.type == pygame.MOUSEWHEEL:
                 if event.y > 0:
-                    self.path_length += 1
+                    self.path_length += 5
                 elif event.y < 0:
-                    self.path_length -= 1
+                    self.path_length -= 5
 
         return quit_requested, pause_pressed
 

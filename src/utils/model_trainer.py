@@ -281,7 +281,7 @@ if __name__ == "__main__":
     env = MultiRobotGridEnv(
         grid_size=(20, 20),
         num_agents=30,
-        agent_view_size=7,
+        agent_view_size=5,
         step_limit=300,
         task_length=5,
         # obstacles=obs,
@@ -290,14 +290,14 @@ if __name__ == "__main__":
         num_episodes=500,
         env=env,
         device=device,
-        # out_model_name="CNN1_8_5.pth",
-        # in_model_name="CNN1_8_5.pth",
+        out_model_name="CNN1+_30_5.pth",
+        in_model_name="epizode440_CNN1_30_5.pth",
         plot=True,
         save_plot_data=False,
         model_class=CNN1,
-        # epsilon=0,
-        # epsilon_min=0,
-        # epsilon_decay=0.995,
-        # epsilon_episodes=500
+        epsilon=0,
+        epsilon_min=0,
+        epsilon_decay=0,
+        epsilon_episodes=0,
     )
     print("Done")
