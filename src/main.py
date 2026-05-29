@@ -74,7 +74,7 @@ if __name__ == "__main__":
     # )
     env = MultiRobotGridEnv(
         grid_size=(20, 20),
-        num_agents=30,
+        num_agents=5,
         agent_view_size=5,
         step_limit=5000,
     )

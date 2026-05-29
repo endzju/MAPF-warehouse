@@ -2,5 +2,6 @@ from enum import Enum
 
 
 class TaskType(Enum):
-    PICKUP = 0
-    LEAVE = 1
+    ENTER = 0
+    PICKUP = 1
+    LEAVE = 2

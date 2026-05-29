@@ -1,4 +1,5 @@
 import ctypes
+from collections import deque
 from pathlib import Path
 
 import gymnasium as gym
@@ -23,14 +24,21 @@ class MultiRobotGridEnv(gym.Env):
         num_agents: int = 5,
         agent_view_size: int = 5,
         obstacles: set[tuple[int, int]] | None = None,
-        depots: list[Depot] = [Depot((0, 0))],
+        input_depots: list[Depot] = [],
+        output_depots: list[Depot] = [],
         step_limit: int = 100,
         task_length: int = 5,
-        finish_times: dict[TaskType, int] = {TaskType.PICKUP: 1, TaskType.LEAVE: 1},
+        finish_times: dict[TaskType, int] = {
+            TaskType.ENTER: 1,
+            TaskType.PICKUP: 1,
+            TaskType.LEAVE: 1,
+        },
+        tasks: list[Task] = [],
+        num_tasks: int = 100,
     ):
         super(MultiRobotGridEnv, self).__init__()
         self.grid_width, self.grid_height = grid_size
-        self.num_states = self.grid_width * self.grid_height
+        # self.num_states = self.grid_width * self.grid_height
         self.num_agents = num_agents
         self.obstacles = np.zeros((self.grid_width, self.grid_height), dtype=np.uint8)
         self.obstacle_set = set()
@@ -40,13 +48,20 @@ class MultiRobotGridEnv(gym.Env):
         self.avg_delivery_time = 0
         self.deliveries = 0
         self.finish_times = finish_times
+        self.tasks = deque(tasks)
+        self.num_tasks = num_tasks
 
         if obstacles:
             obs = np.array(obstacles, dtype=np.uint8)
             self.obstacles[obs[:, 0], obs[:, 1]] = 1
             self.obstacle_set = obstacles
 
-        self.depots = depots
+        self.input_depots = input_depots
+        self.output_depots = output_depots
+        if len(self.input_depots) != len(self.output_depots):
+            raise ValueError(
+                "Number of input depots must be equal to number of output depots"
+            )
         self.step_limit = step_limit
         self.step_count = 0
         self.task_length = task_length
@@ -91,8 +106,11 @@ class MultiRobotGridEnv(gym.Env):
         self.info_font = pygame.font.SysFont("Arial", 22)
         self.alert_font = pygame.font.SysFont("Arial", 32)
 
+    def _get_unique_depots(self) -> list[Depot]:
+        return list(set(self.input_depots + self.output_depots))
+
     def _depot_positions(self) -> set[tuple[int, int]]:
-        return {depot.pos for depot in self.depots}
+        return {depot.pos for depot in self._get_unique_depots()}
 
     def _obstacle_cells(self) -> set[tuple[int, int]]:
         indices = np.argwhere(self.obstacles == 1)
@@ -119,34 +137,19 @@ class MultiRobotGridEnv(gym.Env):
         self._calc_padded_obstacle_grid()
         self.agents.clear()
         empty_cells = list(self.get_empty_cells(is_depot_obstacle=True))
-        agent_indices = self.np_random.choice(
-            len(empty_cells), size=self.num_agents, replace=False
-        )
-        goals = []
-        for i in range(self.num_agents):
-            goals.append(
-                self.np_random.choice(
+
+        if not self.tasks:
+            goal_positions = []
+            for i in range(self.num_tasks):
+                goal_i = self.np_random.choice(
                     len(empty_cells), size=self.task_length, replace=True
                 )
-            )
-        observations = {}
-
-        for i, (agent_i, goal_indices) in enumerate(zip(agent_indices, goals)):
-            agent_pos = empty_cells[agent_i]
-            goal_positions = [empty_cells[goal_i] for goal_i in goal_indices] + [
-                self.depots[0].pos
-            ]
-            task_types = [TaskType.PICKUP] * len(goal_indices) + [TaskType.LEAVE]
+                goal_positions.append(empty_cells[goal_i])
+            task_types = [TaskType.PICKUP] * len(goal_positions)
             task = Task(goal_positions, task_types, id=i)
-            robot = DeliveryRobot(
-                position=agent_pos,
-                task=task,
-                depot=self.depots[0],
-                id=i,
-                finish_times=self.finish_times,
-            )
-            self.agents.add(robot)
-            observations[robot.id] = self._get_obs(robot)
+            self.tasks.append(task)
+
+        observations = {}
 
         self.avg_manhattan_distance = self._avg_manhattan_distance()
         return observations, {}
@@ -174,6 +177,41 @@ class MultiRobotGridEnv(gym.Env):
         empty_cells = set(previous_empty_cells)
         agent_list = list(self.agents)
         self.np_random.shuffle(agent_list)
+
+        agent_positions = {agent.pos for agent in self.agents}
+        empty_input_depots = {
+            depot for depot in self.input_depots if depot.pos not in agent_positions
+        }
+
+        # assign task, deploy robot
+        task = self.tasks.popleft()
+
+        # assign best depot currently available
+        while empty_input_depots:
+            min_dist = min(
+                [
+                    manhattan_distance(d.pos, task.goal_positions[0])
+                    for d in empty_input_depots
+                ]
+            )
+            for depot_idx, depot in enumerate(self.input_depots):
+                if depot not in empty_input_depots:
+                    continue
+                if manhattan_distance(depot.pos, task.goal_positions[0]) == min_dist:
+                    task.goal_positions += self.output_depots[depot_idx].pos
+                    task.goalTypes += [TaskType.LEAVE]
+                    self.agents.add(
+                        DeliveryRobot(
+                            depot.pos,
+                            task,
+                            depot,
+                            task.id,
+                            self.finish_times,
+                        )
+                    )
+                    depot.task_history.append(task)
+                    empty_input_depots.remove(depot)
+                    break
 
         for agent in agent_list:
             if agent.id in actions:
@@ -311,6 +349,7 @@ class MultiRobotGridEnv(gym.Env):
 
     def _avg_manhattan_distance(self) -> float:
         distance_list = []
+
         for agent in self.agents:
             goals = [agent.pos] + agent.task.goals
             distance = 0
@@ -336,7 +375,7 @@ class MultiRobotGridEnv(gym.Env):
                 if self.obstacles[x, y]:
                     grid[x, y] = "#"
 
-        for d in self.depots:
+        for d in self._get_unique_depots():
             gx, gy = d.pos
             grid[gx, gy] = "D"
         for agent in self.agents:
@@ -437,7 +476,7 @@ class MultiRobotGridEnv(gym.Env):
                 pygame.draw.rect(canvas, (200, 200, 200), rect, 1)
 
         # 2. Rysowanie Depotów (Niebieskie kwadraty)
-        for depot in self.depots:
+        for depot in self._get_unique_depots():
             d_rect = pygame.Rect(
                 offset_x + depot.pos[0] * dynamic_cell_size,
                 offset_y + depot.pos[1] * dynamic_cell_size,
