@@ -2,8 +2,8 @@ from collections import deque
 from itertools import islice
 
 # if TYPE_CHECKING:
-from src.agents.depot import Depot
-from src.agents.task import Task
+from src.models.depot import Depot
+from src.models.task import Task
 from src.utils.enums import TaskType
 
 
@@ -142,8 +142,8 @@ class DeliveryRobot:
 
     def _next_task(self) -> None:
         if self.task.is_completed():
-            # print("IMPLICIT LEAVE")
-            # self.goal_pos, self.task_type = self.depot.pos, TaskType.LEAVE
+            # go to depot
+            self.goal_pos, self.task_type = self.depot.pos, TaskType.LEAVE
             return
         self.goal_pos, self.task_type = self.task.pop_next()
 
