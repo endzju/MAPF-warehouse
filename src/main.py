@@ -52,7 +52,7 @@ def main(
 
         actions = {
             agent_id: dqn_agent.get_action(obs, device="cpu")
-            for agent_id, obs in observations.items()
+            for agent_id, obs in enumerate(observations)
         }
 
         observations, rewards, terminated, truncated, info = env.step(actions)
@@ -98,6 +98,7 @@ if __name__ == "__main__":
             delivery_times = []
             for num_robots in range(10, 101, 10):
                 env.max_robots = 5
+                env.reset()
                 avg_manhatan_delivery_time, avg_delivery_time = main(
                     model_path=model_path,
                     env=env,

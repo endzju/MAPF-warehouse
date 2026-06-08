@@ -155,7 +155,7 @@ class DeliveryRobot:
         return abs(pos[0] - self.goal_pos[0]) + abs(pos[1] - self.goal_pos[1])
 
     def __eq__(self, other: "DeliveryRobot"):
-        return self.id == other.id
+        return isinstance(other, DeliveryRobot) and self.id == other.id
 
     def __hash__(self):
         return hash(self.id)

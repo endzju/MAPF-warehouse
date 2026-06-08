@@ -1,5 +1,5 @@
 import ctypes
-from collections import defaultdict
+from collections import defaultdict, deque
 from pathlib import Path
 
 import gymnasium as gym
@@ -42,7 +42,7 @@ class MultiRobotGridEnv(gym.Env):
         self.obstacles = np.zeros((self.grid_width, self.grid_height), dtype=np.uint8)
         self.obstacle_set = set()
         self.agent_view_size = agent_view_size
-        self.agents: set[DeliveryRobot] = set()
+        self.agents: list[DeliveryRobot] = [None] * max_robots
         self.avg_manhattan_distance = 0
         self.avg_delivery_time = 0
         self.deliveries = 0
@@ -51,11 +51,16 @@ class MultiRobotGridEnv(gym.Env):
         self.tasks = []
         self.num_tasks = num_tasks
         self.max_robots = max_robots
+        self.available_ids = deque(range(self.max_robots))
 
         if obstacles:
             obs = np.array(obstacles, dtype=np.uint8)
             self.obstacles[obs[:, 0], obs[:, 1]] = 1
             self.obstacle_set = obstacles
+
+        self.empty_obs = np.zeros(
+            (self.agent_view_size, self.agent_view_size), dtype=np.uint8
+        )
 
         self.input_depots = input_depots
         self.output_depots = output_depots
@@ -78,20 +83,19 @@ class MultiRobotGridEnv(gym.Env):
                 "view": spaces.Box(
                     low=0,
                     high=1,
-                    shape=(4, self.agent_view_size, self.agent_view_size),
+                    shape=(
+                        self.max_robots,
+                        4,
+                        self.agent_view_size,
+                        self.agent_view_size,
+                    ),
                     dtype=np.uint8,
                 ),
+                # difference in x and y coordinates from the goal
                 "goal_vector": spaces.Box(
                     low=-1.0,
                     high=1.0,
-                    shape=(2,),
-                    dtype=np.float32,
-                ),
-                # If hit wall or other agent
-                "aditional_info": spaces.Box(
-                    low=0,
-                    high=1.0,
-                    shape=(1,),
+                    shape=(self.max_robots, 2),
                     dtype=np.float32,
                 ),
             }
@@ -123,6 +127,8 @@ class MultiRobotGridEnv(gym.Env):
     ) -> set[tuple[int, int]]:
         occupied_cells = self._obstacle_cells()
         for agent in self.agents:
+            if agent is None:
+                continue
             occupied_cells.update(agent.get_occupied_cells())
         if is_depot_obstacle:
             occupied_cells.update(self._depot_positions())
@@ -146,7 +152,8 @@ class MultiRobotGridEnv(gym.Env):
         self.tasks = []
         super().reset(seed=seed)
         self._calc_padded_obstacle_grid()
-        self.agents.clear()
+        self.agents = [None] * self.max_robots
+        self.available_ids = deque(range(self.max_robots))
         empty_cells = list(
             self.get_empty_cells(is_depot_obstacle=True, depot_obstacle_radius=2)
         )
@@ -169,10 +176,16 @@ class MultiRobotGridEnv(gym.Env):
             depot = self.input_depots[idx % len(self.input_depots)]
             depot.add_task(task)
 
-        observations = {}
+        observations = [
+            self._get_obs(agent=None, is_dummy=True) for _ in range(self.max_robots)
+        ]
 
         self.avg_manhattan_distance = self._avg_manhattan_time()
-        return observations, {}
+        batched_obs = {
+            "view": np.stack([obs["view"] for obs in observations]),
+            "goal_vector": np.stack([obs["goal_vector"] for obs in observations]),
+        }
+        return batched_obs, {}
 
     def _next_pos(self, agent: DeliveryRobot, action: int) -> tuple[int, int]:
         dx, dy = 0, 0
@@ -188,48 +201,38 @@ class MultiRobotGridEnv(gym.Env):
         return (agent.pos[0] + dx, agent.pos[1] + dy)
 
     def _next_id(self):
-        self.id_counter += 1
-        return self.id_counter
+        if len(self.available_ids) == 0:
+            raise ValueError("No available ids")
+        return self.available_ids.popleft()
 
     def _all_tasks_completed(self):
-        if len(self.agents):
+        if len(self.available_ids) < self.max_robots:
             return False
         for depot in self.input_depots:
             if len(depot.tasks) > 0:
                 return False
         return True
 
-    def step(self, actions: dict[int, int]):
+    def step(self, actions: list[int]):
         # actions to array np. [akcja_robota_0, akcja_robota_1, ...]
-        observations = {}
-        rewards = {}
+        observations = [None] * self.max_robots
+        rewards = [0] * self.max_robots
         self._calc_padded_obstacle_grid()
 
         previous_empty_cells = self.get_empty_cells(is_depot_obstacle=False)
         empty_cells = set(previous_empty_cells)
-        agent_list = list(self.agents)
+        agent_list = [agent for agent in self.agents if agent is not None]
         self.np_random.shuffle(agent_list)
 
-        agent_positions = {agent.pos for agent in self.agents}
+        agent_positions = {agent.pos for agent in self.agents if agent is not None}
         empty_input_depots = {
             (in_depot, out_depot)
             for in_depot, out_depot in zip(self.input_depots, self.output_depots)
             if in_depot.pos not in agent_positions
         }
 
-        # deploy robot if tasks left
-        for in_depot, out_depot in empty_input_depots:
-            if len(self.agents) < self.max_robots and in_depot.has_tasks():
-                agent = DeliveryRobot(
-                    position=in_depot.pos,
-                    task=in_depot.pop_task(),
-                    depot=out_depot,
-                    id=self._next_id(),
-                )
-                self.agents.add(agent)
-
         for agent in agent_list:
-            if agent.id in actions:
+            if actions[agent.id] is not None:
                 if agent.is_stuck():
                     random_move = self.np_random.choice(4)
                     next_pos = self._next_pos(agent, random_move)
@@ -247,27 +250,46 @@ class MultiRobotGridEnv(gym.Env):
                 else:
                     rewards[agent.id] = agent.reward(next_pos, previous_empty_cells)
 
-        remove_agents = set()
-
+        # Move agents and remove those that are done
         for agent in self.agents:
-            if agent.step():
-                remove_agents.add(agent)
+            if agent is not None and agent.step():
                 self.avg_delivery_time = (
                     self.avg_delivery_time * self.deliveries + agent.step_count
                 ) / (self.deliveries + 1)
                 self.deliveries += 1
+                self.available_ids.append(agent.id)
+                self.agents[agent.id] = None
 
-        self.agents.difference_update(remove_agents)
-
-        for agent in self.agents:
-            if not agent.is_idle() and not agent.is_done():
+        for agent_id, agent in enumerate(self.agents):
+            if agent is None:
+                observations[agent_id] = self._get_obs(agent=None, is_dummy=True)
+            elif not agent.is_done():
                 observations[agent.id] = self._get_obs(agent)
 
         truncated = self.step_count >= self.step_limit
         terminated = self._all_tasks_completed()
 
         self.step_count += 1
-        return observations, rewards, terminated, truncated, {}
+
+        # deploy robot if tasks left
+        for in_depot, out_depot in empty_input_depots:
+            if len(self.available_ids) and in_depot.has_tasks():
+                agent = DeliveryRobot(
+                    position=in_depot.pos,
+                    task=in_depot.pop_task(),
+                    depot=out_depot,
+                    id=self._next_id(),
+                )
+                self.agents[agent.id] = agent
+
+        batched_obs = {
+            "view": np.stack([obs["view"] for obs in observations]),
+            "goal_vector": np.stack([obs["goal_vector"] for obs in observations]),
+        }
+        global_reward = float(np.sum(rewards))
+
+        # return observations, rewards, terminated, truncated, {}
+        return batched_obs, global_reward, terminated, truncated, {}
 
     def _in_view(self, agent: DeliveryRobot, pos: tuple[int, int]) -> bool:
         if agent.pos is None:
@@ -322,16 +344,18 @@ class MultiRobotGridEnv(gym.Env):
             self.obstacles, pad_width=radius, mode="constant", constant_values=1
         )
 
-    def _get_obs(self, agent: DeliveryRobot) -> dict[str, np.ndarray]:
+    def _get_obs(self, agent: DeliveryRobot, is_dummy=False) -> dict[str, np.ndarray]:
         radius = self.agent_view_size // 2
 
-        ax, ay = agent.pos
-        padded_ax = ax + radius
-        padded_ay = ay + radius
-        obstacles = self._padded_obstacle_grid[
-            padded_ay - radius : padded_ay + radius + 1,
-            padded_ax - radius : padded_ax + radius + 1,
-        ]
+        if is_dummy:
+            return {
+                "view": np.zeros(
+                    shape=(4, self.agent_view_size, self.agent_view_size),
+                    dtype=np.uint8,
+                ),
+                "goal_vector": np.zeros(shape=(2,), dtype=np.float32),
+            }
+
         other_agent_positions = np.zeros(
             shape=(self.agent_view_size, self.agent_view_size), dtype=np.uint8
         )
@@ -341,9 +365,16 @@ class MultiRobotGridEnv(gym.Env):
         agent_goal = np.zeros(
             shape=(self.agent_view_size, self.agent_view_size), dtype=np.uint8
         )
+        ax, ay = agent.pos
+        padded_ax = ax + radius
+        padded_ay = ay + radius
+        obstacles = self._padded_obstacle_grid[
+            padded_ay - radius : padded_ay + radius + 1,
+            padded_ax - radius : padded_ax + radius + 1,
+        ]
 
         for other_agent in self.agents:
-            if other_agent == agent:
+            if other_agent is None or other_agent == agent:
                 continue
             for cell in other_agent.get_occupied_cells():
                 self._add_if_in_view(agent, cell, other_agent_positions)
@@ -359,7 +390,6 @@ class MultiRobotGridEnv(gym.Env):
                 [obstacles, other_agent_positions, other_agent_goals, agent_goal]
             ),
             "goal_vector": goal_vector,
-            "aditional_info": 0,
         }
 
     def _avg_manhattan_time(self) -> float:
@@ -403,29 +433,6 @@ class MultiRobotGridEnv(gym.Env):
                 time_list[i] = new_dist
                 min_dist = time_list[i] + 1 + self.finish_times[TaskType.LEAVE]
         return delivery_time / len(self.tasks)
-
-    def render_as_text(self, mode="human") -> str:
-        grid = np.full((self.grid_width, self.grid_height), ".", dtype=str)
-        for x in range(self.grid_width):
-            for y in range(self.grid_height):
-                if self.obstacles[x, y]:
-                    grid[x, y] = "#"
-
-        for d in self._get_unique_depots():
-            gx, gy = d.pos
-            grid[gx, gy] = "D"
-        for agent in self.agents:
-            if agent.task_type == TaskType.PICKUP:
-                ax, ay = agent.goal_pos
-                grid[ax, ay] = "o"
-        for agent in self.agents:
-            ax, ay = agent.pos
-            grid[ax, ay] = str(agent.id)
-
-        out = ""
-        for row in grid.T:
-            out += " ".join(row) + "\n"
-        return out
 
     def handle_events(self):
         events = pygame.event.get()
@@ -528,6 +535,8 @@ class MultiRobotGridEnv(gym.Env):
 
         # Drawing packages and depots
         for agent in self.agents:
+            if agent is None:
+                continue
             agent_id_str = f"ID:{agent.id}"
             if agent.goal_pos:
                 pos_x = offset_x + agent.goal_pos[0] * dynamic_cell_size
@@ -556,6 +565,8 @@ class MultiRobotGridEnv(gym.Env):
 
         # Drawing robots
         for agent in self.agents:
+            if agent is None:
+                continue
             pos_x = offset_x + agent.pos[0] * dynamic_cell_size
             pos_y = offset_y + agent.pos[1] * dynamic_cell_size
 
