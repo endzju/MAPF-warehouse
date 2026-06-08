@@ -29,12 +29,25 @@ env = Monitor(env, str(data_dir))
 
 # algorithm = PPO
 algorithm = A2C
+algorithm_name = algorithm.__name__ + "_mapf_warehouse"
 
-model_path = data_dir / f"{algorithm.__name__}_mapf_warehouse"
+configs = [
+    {"learning_rate": 0.0003, "n_steps": 2048},
+    {"learning_rate": 0.0001, "n_steps": 1024},
+]
+config = configs[1]
 
-model = algorithm("MultiInputPolicy", env, verbose=1, tensorboard_log=str(data_dir))
+model_path = data_dir / algorithm_name
 
-total_timesteps = 500_000
+model = algorithm(
+    "MultiInputPolicy",
+    env,
+    verbose=1,
+    tensorboard_log=str(data_dir),
+    # **config,
+)
+
+total_timesteps = 300_000
 
 model.learn(total_timesteps=total_timesteps)
 
@@ -53,11 +66,11 @@ else:
 
 plt.figure(figsize=(10, 5))
 plt.plot(x_smooth, y_smooth, label="Mean reward")
-plt.title(f"{algorithm.__name__} learning curve")
+plt.title(f"{algorithm_name} learning curve")
 plt.xlabel("Timesteps")
 plt.ylabel("Reward")
 plt.grid(True)
 plt.legend()
 
-plt.savefig(str(data_dir / f"learning_curve_{algorithm.__name__}.png"), dpi=300)
+plt.savefig(str(data_dir / f"learning_curve_{algorithm_name}.png"), dpi=300)
 print("Wykres został zapisany jako 'learning_curve.png'")
