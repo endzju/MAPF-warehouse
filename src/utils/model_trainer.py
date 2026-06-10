@@ -11,6 +11,7 @@ import torch.nn.functional as F
 
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
+from src.models.depot import Depot
 from src.neural_networks.CNN.cnn import CNN1  # noqa: F401
 from src.neural_networks.DQN.dqn import DQNet1, DQNet2, DQNet3  # noqa: F401
 from src.utils.plots import (
@@ -172,10 +173,10 @@ def train(
 
     batch_size = 512 * 8
     num_batches = 50
-    update_episodes = 20
+    update_episodes = 10
 
     memory = EfficientReplayBuffer(
-        capacity=1000 * batch_size,
+        capacity=500 * batch_size,
         view_shape=vshape,
         goal_shape=(2,),
     )
@@ -234,11 +235,11 @@ def train(
 
         agent_brain.update_epsilon()
 
-        # Every {update_episodes} epizodes update Target Network and save model to history
+        # Every {update_episodes} episodes update Target Network and save model to history
         if episode % update_episodes == 0 and episode > 0:
             target_net.load_state_dict(policy_net.state_dict())
             torch.save(
-                target_net.state_dict(), history_path / f"epizode{episode}_{filename}"
+                target_net.state_dict(), history_path / f"episode{episode}_{filename}"
             )
 
     # Save model after training
@@ -276,28 +277,41 @@ def train(
 if __name__ == "__main__":
     print("Training...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Wersja PyTorch:", torch.__version__)
+    print("Czy architektura CUDA jest dostępna?:", torch.cuda.is_available())
     print(f"Device: {device}")
-    obs = [(1, 1), (3, 4)]
+    depot1 = Depot((0, 0))
+    depot2 = Depot((19, 0))
+    depot3 = Depot((0, 19))
+    depot4 = Depot((19, 19))
     env = MultiRobotGridEnv(
         grid_size=(20, 20),
-        num_agents=30,
+        max_robots=50,
         agent_view_size=5,
-        step_limit=300,
+        step_limit=1000,
         task_length=5,
-        # obstacles=obs,
+        num_tasks=250,
+        input_depots=[depot1, depot2],
+        output_depots=[depot3, depot4],
     )
+    # model_class = CNN1
+    model_class = DQNet2
+    print(f"Training model: {model_class.__name__}, view size: {env.agent_view_size}")
+    params = {
+        "num_episodes": 500,
+        "env": env,
+        "device": device,
+        "in_model_name": f"final_{model_class.__name__}_{env.max_robots}_{env.agent_view_size}.pth",
+        "out_model_name": f"final_{model_class.__name__}+_{env.max_robots}_{env.agent_view_size}.pth",
+        "plot": True,
+        "save_plot_data": False,
+        "model_class": model_class,
+        "epsilon": 0,
+        "epsilon_min": 0,
+        "epsilon_decay": 0,
+        "epsilon_episodes": 0,
+    }
     train(
-        num_episodes=500,
-        env=env,
-        device=device,
-        out_model_name="CNN1+_30_5.pth",
-        in_model_name="epizode440_CNN1_30_5.pth",
-        plot=True,
-        save_plot_data=False,
-        model_class=CNN1,
-        epsilon=0,
-        epsilon_min=0,
-        epsilon_decay=0,
-        epsilon_episodes=0,
+        **params,
     )
     print("Done")

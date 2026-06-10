@@ -32,13 +32,15 @@ class DeliveryRobot:
         self,
         position: tuple[int, int],
         task: Task,
-        depot: Depot,
+        in_depot: Depot,
+        out_depot: Depot,
         id: int,
         finish_times: dict[TaskType, int] | None = None,
     ):
         self.pos = position
         self.task = task
-        self.depot = depot
+        self.in_depot = in_depot
+        self.out_depot = out_depot
         self.id = id
         self.was_blocked = False
         self.finish_times = finish_times or {
@@ -65,8 +67,7 @@ class DeliveryRobot:
             return False
 
         # leave if on depot
-        if self.task_type == TaskType.LEAVE and self.pos == self.depot.pos:
-            self.depot.stored_agents.append(self)
+        if self.task_type == TaskType.LEAVE and self.pos == self.out_depot.pos:
             return True
 
         # move
@@ -143,7 +144,7 @@ class DeliveryRobot:
     def _next_task(self) -> None:
         if self.task.is_completed():
             # go to depot
-            self.goal_pos, self.task_type = self.depot.pos, TaskType.LEAVE
+            self.goal_pos, self.task_type = self.out_depot.pos, TaskType.LEAVE
             return
         self.goal_pos, self.task_type = self.task.pop_next()
 
