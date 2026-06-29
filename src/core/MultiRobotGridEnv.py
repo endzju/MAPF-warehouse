@@ -21,7 +21,7 @@ import pygame  # noqa: E402
 class MultiRobotGridEnv(gym.Env):
     def __init__(
         self,
-        grid_size: tuple[int, int] = (10, 10),
+        grid_size: tuple[int, int] = (20, 20),
         agent_view_size: int = 5,
         obstacles: set[tuple[int, int]] | None = None,
         input_depots: list[Depot] = [],
@@ -39,7 +39,6 @@ class MultiRobotGridEnv(gym.Env):
     ):
         super(MultiRobotGridEnv, self).__init__()
         self.grid_width, self.grid_height = grid_size
-        # self.num_states = self.grid_width * self.grid_height
         self.obstacles = np.zeros((self.grid_width, self.grid_height), dtype=np.uint8)
         self.obstacle_set = set()
         self.agent_view_size = agent_view_size
@@ -63,8 +62,8 @@ class MultiRobotGridEnv(gym.Env):
             (self.agent_view_size, self.agent_view_size), dtype=np.uint8
         )
 
-        self.input_depots = input_depots
-        self.output_depots = output_depots
+        self.input_depots = input_depots or self._default_input_depots()
+        self.output_depots = output_depots or self._default_output_depots()
         self._update_depot_max_robots()
         if len(self.input_depots) != len(self.output_depots):
             raise ValueError(
@@ -119,6 +118,18 @@ class MultiRobotGridEnv(gym.Env):
 
     def _depot_positions(self) -> set[tuple[int, int]]:
         return {depot.pos for depot in self._get_unique_depots()}
+
+    def _default_input_depots(self):
+        return [
+            Depot((0, 0)),
+            Depot((self.grid_width - 1, 0)),
+        ]
+
+    def _default_output_depots(self):
+        return [
+            Depot((0, self.grid_height - 1)),
+            Depot((self.grid_width - 1, self.grid_height - 1)),
+        ]
 
     def _obstacle_cells(self) -> set[tuple[int, int]]:
         indices = np.argwhere(self.obstacles == 1)
@@ -222,6 +233,12 @@ class MultiRobotGridEnv(gym.Env):
             if len(depot.tasks) > 0:
                 return False
         return True
+
+    def get_num_tasks_completed(self) -> int:
+        completed = 0
+        for depot in self.input_depots:
+            completed += len(depot.finnished_tasks)
+        return completed
 
     def step(self, actions: list[int]):
         # actions to array np. [akcja_robota_0, akcja_robota_1, ...]

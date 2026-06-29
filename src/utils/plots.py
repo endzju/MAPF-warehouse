@@ -4,110 +4,66 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from torch import nn
 
 
-def save_completed_deliveries_plot(
-    completed_deliveries: list[int],
+def plot_avg_completed_tasks_percentage(
+    avg_completed_tasks: list[int],
+    max_tasks: int,
     path: Path,
     filename: str,
     save_plot_data: bool = False,
     window_size: int = 20,
-    start_eps: float = None,
-    epsilon_decay: float = None,
 ):
     filename = filename.removesuffix(".pth")
-    path = path / f"{filename}_completed_deliveries_w{window_size}.png"
-    n = len(completed_deliveries)
-    completed_deliveries_sum = [0] * n
-    for i in range(n):
-        completed_deliveries_sum[i] = sum(
-            completed_deliveries[i - window_size + 1 : i + 1]
-        )
+    path = path / f"{filename}_completed_tasks_percentage_w{window_size}.png"
+    completed_tasks_percentage = [t / max_tasks * 100 for t in avg_completed_tasks]
     plt.figure(figsize=(10, 6))
-    x = range(n)
-    plt.plot(x, completed_deliveries_sum)
-    # if start_eps is not None and epsilon_decay is not None:
-    #     y = [start_eps * (epsilon_decay**i) for i in x]
-    #     plt.plot(x, y, label="eps")
-    plt.title(f"Completed deliveries in last {window_size} episodes")
-    plt.xlabel("episode")
-    plt.ylabel("deliveries")
+    x = range(len(avg_completed_tasks))
+    plt.plot(x, completed_tasks_percentage)
+    plt.title(f"Completed tasks percentage (last {window_size} episodes)")
+    plt.xlabel("window")
+    plt.ylabel("completed tasks [%]")
+    plt.ylim(0, 100)
     plt.savefig(path, dpi=300)
+    plt.close()
 
     if save_plot_data:
         txt_path = path.with_suffix(".txt")
-        np.savetxt(txt_path, completed_deliveries_sum, fmt="%d")
+        np.savetxt(txt_path, completed_tasks_percentage, fmt="%d")
 
 
-def save_avg_stepcount(
-    completion_steps: list[int],
+def plot_avg_stepcount(
+    avg_completion_steps: list[int],
     path: Path,
     filename: str,
+    window_size: int,
     save_plot_data: bool = False,
-    window_size: int = 20,
-    start_eps: float = None,
-    epsilon_decay: float = None,
 ):
     filename = filename.removesuffix(".pth")
     path = path / f"{filename}_avg_completion_steps_w{window_size}.png"
-    n = len(completion_steps)
-    avg_stepcount_sum = [max(completion_steps)] * n
-    for i in range(n):
-        cur_winsize = min(i + 1, window_size)
-        avg_stepcount_sum[i] = (
-            sum(completion_steps[i - cur_winsize + 1 : i + 1]) / cur_winsize
-        )
+
     plt.figure(figsize=(10, 6))
-    x = range(n)
-    plt.plot(x, avg_stepcount_sum)
-    # if start_eps is not None and epsilon_decay is not None:
-    #     y = [start_eps * (epsilon_decay**i) for i in x]
-    #     plt.plot(x, y, label="eps")
-    plt.title(f"Average stepcount in last {window_size} episodes")
+    x = range(len(avg_completion_steps))
+    plt.plot(x, avg_completion_steps)
+    plt.title(f"Average stepcount (last {window_size} episodes)")
     plt.xlabel("episode")
-    plt.ylabel("stepcount")
+    plt.ylabel("avg stepcount")
     plt.savefig(path, dpi=300)
+    plt.close()
     if save_plot_data:
         txt_path = path.with_suffix(".txt")
-        np.savetxt(txt_path, avg_stepcount_sum, fmt="%d")
+        np.savetxt(txt_path, avg_completion_steps, fmt="%d")
 
 
-def save_stepcount(
-    completion_steps: list[int],
-    path: Path,
-    filename: str,
-    save_plot_data: bool = False,
-    start_eps: float = None,
-    epsilon_decay: float = None,
-):
-    filename = filename.removesuffix(".pth")
-    path = path / f"{filename}_completion_steps.png"
-    plt.figure(figsize=(10, 6))
-    x = range(len(completion_steps))
-    plt.plot(x, completion_steps)
-    # if start_eps is not None and epsilon_decay is not None:
-    #     y = [start_eps * (epsilon_decay**i) for i in x]
-    #     plt.plot(x, y, label="eps")
-    plt.title("Stepcount")
-    plt.xlabel("episode")
-    plt.ylabel("stepcount")
-    plt.savefig(path, dpi=300)
-    if save_plot_data:
-        txt_path = path.with_suffix(".txt")
-        np.savetxt(txt_path, completion_steps, fmt="%d")
-
-
-def plot_delivery_quality():
-    models = ["CNN1", "DQNet2"]
-    view_sizes = [5, 7]
+def plot_delivery_quality(models: list[nn.Module], view_sizes: list[int]):
     data = defaultdict(list)
     data_path = Path(__file__).parent.parent / "data" / "times"
     for num_robots in range(10, 81, 10):
-        for model in models:
-            for view_size in view_sizes:
-                filename = data_path / f"{model}_{num_robots}_{view_size}.json"
-                with open(filename, "r", encoding="utf-8") as f:
-                    data[f"{model}_{view_size}"].append(json.load(f))
+        for model, view_size in zip(models, view_sizes, strict=True):
+            filename = data_path / f"{model.__name__}_{num_robots}_{view_size}.json"
+            with open(filename, "r", encoding="utf-8") as f:
+                data[f"{model.__name__}_{view_size}"].append(json.load(f))
 
     # Wykres longer_delivery
     plt.figure(figsize=(10, 6))

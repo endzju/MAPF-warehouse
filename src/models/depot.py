@@ -5,8 +5,9 @@ class Depot:
     def __init__(self, pos: tuple[int, int] = (0, 0)):
         self.pos = pos
         # self.stored_agents = []
-        self.task_history = []
+        # self.task_history = []
         self.tasks = []
+        self.finnished_tasks = []
         self.max_robots = 1
 
     def pop_task(self) -> Task:

@@ -1,7 +1,7 @@
-import math
 import random
 import time
 from collections import deque
+from itertools import product
 from pathlib import Path
 
 import numpy as np
@@ -11,14 +11,9 @@ import torch.nn.functional as F
 
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
-from src.models.depot import Depot
 from src.neural_networks.CNN.cnn import CNN1  # noqa: F401
-from src.neural_networks.DQN.dqn import DQNet1, DQNet2, DQNet3  # noqa: F401
-from src.utils.plots import (
-    save_avg_stepcount,
-    save_completed_deliveries_plot,
-    save_stepcount,
-)
+from src.neural_networks.MLP.mlp import MLP1, MLP2, MLP3  # noqa: F401
+from src.utils.plots import plot_avg_completed_tasks_percentage, plot_avg_stepcount
 
 
 class ReplayBuffer:
@@ -79,6 +74,14 @@ class EfficientReplayBuffer:
         return self.size
 
 
+def get_window_avg(sequence, window_size):
+    window_avg = []
+    for i in range(len(sequence) // window_size):
+        task_window = sequence[i * window_size : (i + 1) * window_size]
+        window_avg.append(sum(task_window) / len(task_window))
+    return window_avg
+
+
 def optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler):
     (
         views_np,
@@ -127,27 +130,42 @@ def optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler):
 
 
 def train(
-    env: MultiRobotGridEnv,
+    env_grid_size: tuple[int, int],
+    env_max_robots: int,
+    env_agent_view_size: int,
+    env_step_limit: int,
+    env_task_length: int,
+    env_num_tasks: int,
     model_class: nn.Module,
-    num_episodes: int = 100,
+    num_episodes: int,
+    epsilon: float,
+    epsilon_min: float,
+    epsilon_decay: float,
+    epsilon_episodes: int,
     device: torch.device = torch.device("cpu"),
-    in_model_name=None,
-    out_model_name=None,
     plot: bool = True,
     save_plot_data: bool = False,
-    epsilon: float = 1.0,
-    epsilon_min: float = 0.01,
-    epsilon_decay: float = 0.995,
-    epsilon_episodes: int = math.inf,
     lr=1e-4,
-):
-    if out_model_name is None:
-        out_model_name = (
-            f"{model_class.__name__}_{env.num_agents}_{env.agent_view_size}.pth"
-        )
-    view_size = env.agent_view_size
+) -> tuple[list[nn.Module], list[float], list[float]]:
+    """
+    Train a model.
 
-    filename = out_model_name
+    Returns:
+        list[nn.Module]: List of trained models.
+        list[float]: List of completed tasks per episode.
+        list[float]: List of steps per episode.
+
+    """
+    env = MultiRobotGridEnv(
+        grid_size=env_grid_size,
+        max_robots=env_max_robots,
+        agent_view_size=env_agent_view_size,
+        step_limit=env_step_limit,
+        task_length=env_task_length,
+        num_tasks=env_num_tasks,
+    )
+
+    view_size = env.agent_view_size
     nn_path = Path(__file__).parent.parent / "neural_networks"
     model_path = nn_path / "models"
     plot_path = nn_path / "plots"
@@ -159,14 +177,7 @@ def train(
     vshape = (4, view_size, view_size)
     policy_net = model_class(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
     target_net = model_class(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
-    if in_model_name:
-        path = model_path / in_model_name
-        weights_dict = torch.load(path, map_location=device, weights_only=True)
-        policy_net.load_state_dict(weights_dict)
     target_net.load_state_dict(policy_net.state_dict())
-
-    # if device.type == "cuda":
-    #     policy_net = torch.compile(policy_net)
 
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=lr)
     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
@@ -189,8 +200,10 @@ def train(
         decay=epsilon_decay,
     )
 
-    completed_deliveries = [0] * num_episodes
+    completed_tasks = [0] * num_episodes
     completion_steps = [env.step_limit] * num_episodes
+
+    model_history = []
 
     tic = time.time()
     for episode in range(num_episodes):
@@ -202,18 +215,17 @@ def train(
         print(f"--- Episode: {episode}, epsilon: {agent_brain.epsilon:.5f} ", end="")
 
         while not done:
-            actions = agent_brain.get_actions(obs, device)
-
+            actions = agent_brain.get_actions(obs_dict=obs, device=device)
             next_obs, rewards, terminated, truncated, _ = env.step(actions)
-
             done = terminated or truncated
-            if terminated:
-                print("SUCCESS", end="")
-                completed_deliveries[episode] = 1
+            if done:
+                message = "TIMEOUT" if truncated else "SUCCESS"
+                print(
+                    f"{message}, tasks completed: {env.get_num_tasks_completed()}",
+                    end="",
+                )
+                completed_tasks[episode] = env.get_num_tasks_completed()
                 completion_steps[episode] = env.step_count
-
-            elif truncated:
-                print("TIMEOUT", end="")
 
             for agent_id in obs.keys():
                 if agent_id in next_obs:
@@ -224,7 +236,6 @@ def train(
                         next_obs[agent_id],
                         done,
                     )
-
             obs = next_obs
 
         for _ in range(num_batches):
@@ -232,86 +243,83 @@ def train(
             optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler)
         print(f" {time.time() - tic:.2f}s ---")
         tic = time.time()
-
         agent_brain.update_epsilon()
 
         # Every {update_episodes} episodes update Target Network and save model to history
-        if episode % update_episodes == 0 and episode > 0:
+        if (episode + 1) % update_episodes == 0:
+            model_history.append(policy_net.state_dict())
             target_net.load_state_dict(policy_net.state_dict())
-            torch.save(
-                target_net.state_dict(), history_path / f"episode{episode}_{filename}"
-            )
 
-    # Save model after training
-    torch.save(policy_net.state_dict(), model_path / filename)
+    filename = f"{model_class.__name__}_{env_max_robots}_{env_agent_view_size}"
+    avg_completed_tasks = get_window_avg(completed_tasks, update_episodes)
+    avg_completion_steps = get_window_avg(completion_steps, update_episodes)
 
     if plot:
-        save_completed_deliveries_plot(
-            completed_deliveries=completed_deliveries,
+        plot_avg_completed_tasks_percentage(
+            avg_completed_tasks=avg_completed_tasks,
+            max_tasks=env.num_tasks,
             path=plot_path,
-            filename=out_model_name,
+            filename=filename,
             save_plot_data=save_plot_data,
-            window_size=20,
+            window_size=update_episodes,
             start_eps=epsilon,
             epsilon_decay=epsilon_decay,
         )
-        save_avg_stepcount(
-            completion_steps=completion_steps,
+        plot_avg_stepcount(
+            avg_completion_steps=avg_completion_steps,
             path=plot_path,
-            filename=out_model_name,
+            filename=filename,
             save_plot_data=save_plot_data,
-            window_size=20,
+            window_size=update_episodes,
             start_eps=epsilon,
             epsilon_decay=epsilon_decay,
         )
-        save_stepcount(
-            completion_steps=completion_steps,
-            path=plot_path,
-            filename=out_model_name,
-            save_plot_data=save_plot_data,
-            start_eps=epsilon,
-            epsilon_decay=epsilon_decay,
+
+    return model_history, avg_completed_tasks, avg_completion_steps
+
+
+def run_training(
+    model_classes: list[nn.Module],
+    num_robot_list: list[int],
+    view_sizes: list[int],
+    params: dict,
+) -> list[tuple[list[nn.Module], list[int], list[int]]]:
+    """
+    Runs models training.
+
+    Returns:
+        list[nn.Module]: List of trained models.
+        list[float]: List of completed tasks per episode.
+        list[float]: List of steps per episode.
+
+    """
+    print("Training...")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device}")
+
+    training_results = []
+
+    for model_class, num_robots, view_size in product(
+        model_classes, num_robot_list, view_sizes
+    ):
+        params["model_class"] = model_class
+        params["env_max_robots"] = num_robots
+        params["env_num_tasks"] = num_robots * 5
+        params["env_agent_view_size"] = view_size
+
+        print(
+            f"Training model: {model_class.__name__}, num robots: {num_robots}, view size: {view_size}"
         )
+        training_results.append(
+            train(
+                **params,
+            )
+        )
+        print("model trained")
+
+    print("Training done")
+    return training_results
 
 
 if __name__ == "__main__":
-    print("Training...")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("Wersja PyTorch:", torch.__version__)
-    print("Czy architektura CUDA jest dostępna?:", torch.cuda.is_available())
-    print(f"Device: {device}")
-    depot1 = Depot((0, 0))
-    depot2 = Depot((19, 0))
-    depot3 = Depot((0, 19))
-    depot4 = Depot((19, 19))
-    env = MultiRobotGridEnv(
-        grid_size=(20, 20),
-        max_robots=50,
-        agent_view_size=5,
-        step_limit=1000,
-        task_length=5,
-        num_tasks=250,
-        input_depots=[depot1, depot2],
-        output_depots=[depot3, depot4],
-    )
-    # model_class = CNN1
-    model_class = DQNet2
-    print(f"Training model: {model_class.__name__}, view size: {env.agent_view_size}")
-    params = {
-        "num_episodes": 500,
-        "env": env,
-        "device": device,
-        "in_model_name": f"final_{model_class.__name__}_{env.max_robots}_{env.agent_view_size}.pth",
-        "out_model_name": f"final_{model_class.__name__}+_{env.max_robots}_{env.agent_view_size}.pth",
-        "plot": True,
-        "save_plot_data": False,
-        "model_class": model_class,
-        "epsilon": 0,
-        "epsilon_min": 0,
-        "epsilon_decay": 0,
-        "epsilon_episodes": 0,
-    }
-    train(
-        **params,
-    )
-    print("Done")
+    pass

@@ -68,6 +68,7 @@ class DeliveryRobot:
 
         # leave if on depot
         if self.task_type == TaskType.LEAVE and self.pos == self.out_depot.pos:
+            self.in_depot.finnished_tasks.append(self.task)
             return True
 
         # move

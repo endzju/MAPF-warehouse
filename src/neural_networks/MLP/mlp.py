@@ -2,9 +2,9 @@ import torch
 from torch import nn
 
 
-class DQNet1(nn.Module):
+class MLP1(nn.Module):
     def __init__(self, view_shape, goal_vec_size, n_actions):
-        super(DQNet1, self).__init__()
+        super(MLP1, self).__init__()
 
         view_flat_size = view_shape[0] * view_shape[1] * view_shape[2]
 
@@ -26,9 +26,9 @@ class DQNet1(nn.Module):
         return self.network(combined)
 
 
-class DQNet2(nn.Module):
+class MLP2(nn.Module):
     def __init__(self, view_shape, goal_vec_size, n_actions):
-        super(DQNet2, self).__init__()
+        super(MLP2, self).__init__()
 
         view_flat_size = view_shape[0] * view_shape[1] * view_shape[2]
 
@@ -48,9 +48,9 @@ class DQNet2(nn.Module):
         return self.network(combined)
 
 
-class DQNet3(nn.Module):
+class MLP3(nn.Module):
     def __init__(self, view_shape, goal_vec_size, n_actions):
-        super(DQNet3, self).__init__()
+        super(MLP3, self).__init__()
 
         view_flat_size = view_shape[0] * view_shape[1] * view_shape[2]
 
