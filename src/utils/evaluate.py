@@ -2,36 +2,32 @@ import json
 import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
+from statistics import mean
+
+from torch import nn
 
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
-from src.models.depot import Depot
 from src.neural_networks.CNN.cnn import CNN1  # noqa: F401
 from src.neural_networks.MLP.mlp import MLP1, MLP2, MLP3  # noqa: F401
-from utils.load import load_model
 
 
 def run_simulation(
-    model_path="DQN_model_5.pth",
-    env: MultiRobotGridEnv = None,
-    model_class: MLP1 | MLP2 | MLP3 = MLP1,
-    render=True,
+    model: nn.Module,
+    env: MultiRobotGridEnv,
+    render=False,
 ):
-
-    if ".pth" not in model_path:
-        model_path += ".pth"
-
     observations, info = env.reset()
     if render:
         env.render()
 
     terminated = False
     truncated = False
-    total_step = 0
     paused = False
 
+    quit_requested, pause_pressed = False, False
+    dqn_agent = ActionAgent(model, epsilon=0, epsilon_min=0, decay=0)
     while not (terminated or truncated):
-        quit_requested, pause_pressed = False, False
         if render:
             quit_requested, pause_pressed = env.handle_events()
 
@@ -47,18 +43,12 @@ def run_simulation(
             continue
 
         # 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT, 4=WAIT
-        model = load_model(model_path, model_class=model_class)
-        model.eval()
-        dqn_agent = ActionAgent(model, epsilon=0, epsilon_min=0, decay=0)
-
         actions = {
             agent_id: dqn_agent.get_action(obs, device="cpu")
             for agent_id, obs in observations.items()
         }
 
         observations, rewards, terminated, truncated, info = env.step(actions)
-
-        total_step += 1
         if render:
             env.render()
             time.sleep(0.1)
@@ -68,84 +58,104 @@ def run_simulation(
     return env.avg_manhattan_distance, env.avg_delivery_time
 
 
-def run_evaluation(
-    env, num_robots, model_path, model_class, num_simulations=10
-) -> None:
+def evaluate(
+    env_grid_size: tuple[int, int],
+    env_max_robots: int,
+    env_agent_view_size: int,
+    env_step_limit: int,
+    env_task_length: int,
+    env_num_tasks: int,
+    model_state: dict,
+    model_class: type,
+    num_simulations: int,
+    **kwargs,
+) -> dict:
     """
     Evaluates model, measure delivery time of random order placements.
     """
+    env = MultiRobotGridEnv(
+        grid_size=env_grid_size,
+        agent_view_size=env_agent_view_size,
+        max_robots=env_max_robots,
+        step_limit=env_step_limit,
+        task_length=env_task_length,
+        num_tasks=env_num_tasks,
+    )
     manhatan_delivery_times = []
     delivery_times = []
-    env.max_robots = num_robots
-    env.num_tasks = 5 * num_robots
-    data_path = Path(__file__).parent.parent / "data" / "times"
-    data_path.mkdir(parents=True, exist_ok=True)
+
+    vshape = (4, env_agent_view_size, env_agent_view_size)
+    model = model_class(view_shape=vshape, goal_vec_size=2, n_actions=5)
+    model.load_state_dict(model_state)
+    model.eval()
 
     for i in range(num_simulations):
         avg_manhatan_delivery_time, avg_delivery_time = run_simulation(
-            model_path=model_path,
+            model=model,
             env=env,
-            model_class=model_class,
             render=False,
         )
         manhatan_delivery_times.append(avg_manhatan_delivery_time)
         delivery_times.append(avg_delivery_time)
-    name = f"{model_class.__name__}_{num_robots}_{env.agent_view_size}"
-    file_path = data_path / f"{name}.json"
-    longer_delivery = sum(delivery_times) / sum(manhatan_delivery_times)
-    robot_throughput_per_100ticks = (
-        100 / (sum(delivery_times) / len(delivery_times)) * num_robots
-    )
+
+    movement_efficiency = sum(delivery_times) / sum(manhatan_delivery_times)
+    robot_throughput_per_100ticks = 100 / mean(delivery_times) * env_max_robots
     data = {
         "manhatan_delivery_times": manhatan_delivery_times,
+        "avg_manhatan_delivery_time": mean(manhatan_delivery_times),
         "delivery_times": delivery_times,
-        "longer_delivery": longer_delivery,
+        "avg_delivery_time": mean(delivery_times),
+        "movement_efficiency": movement_efficiency,
         "robot_throughput_per_100ticks": robot_throughput_per_100ticks,
-        "num_robots": num_robots,
         "view_size": env.agent_view_size,
     }
-    with file_path.open("w") as f:
-        json.dump(data, f)
+    return data
 
 
-def run_task(args):
-    model_class, model_path, num_robots = args
+def run_eval_task(params: dict) -> dict:
+    return evaluate(**params)
 
-    depot1 = Depot((0, 0))
-    depot2 = Depot((19, 0))
-    depot3 = Depot((0, 19))
-    depot4 = Depot((19, 19))
-    env = MultiRobotGridEnv(
-        grid_size=(20, 20),
-        agent_view_size=7,
-        obstacles=None,
-        input_depots=[depot1, depot2],
-        output_depots=[depot3, depot4],
-        step_limit=5000,
-        task_length=5,
+
+def run_evaluation(
+    model: nn.Module,
+    num_robot_list: list[int],
+    train_num_robots: int,
+    view_size: int,
+    params: dict,
+    is_tuned: bool = False,
+    num_simulations: int = 10,
+) -> None:
+    params = params.copy()
+
+    params["model_state"] = model.state_dict()
+    params["model_class"] = model.__class__
+    params["env_agent_view_size"] = view_size
+    params["env_step_limit"] = 50000
+    params["num_simulations"] = num_simulations
+
+    tasks = []
+    for num_robots in reversed(num_robot_list):
+        params["env_max_robots"] = num_robots
+        params["env_num_tasks"] = num_robots * 5
+        tasks.append(params.copy())
+
+    with ProcessPoolExecutor(max_workers=3) as executor:
+        result = list(executor.map(run_eval_task, tasks))
+    result = reversed(result)
+    data_path = (
+        Path(__file__).parent.parent / "data" / "times" / model.__class__.__name__
     )
-
-    return run_evaluation(
-        env=env,
-        num_robots=num_robots,
-        model_path=model_path,
-        model_class=model_class,
-    )
+    data_path.mkdir(parents=True, exist_ok=True)
+    data = {
+        num_robots: stats
+        for num_robots, stats in zip(num_robot_list, result, strict=True)
+    }
+    infix = "_tuned" if is_tuned else ""
+    filename = f"{model.__class__.__name__}{infix}_{train_num_robots}_{view_size}.json"
+    full_path = data_path / filename
+    with open(full_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
 
 
 if __name__ == "__main__":
-    model_classes = [
-        MLP2,
-    ]
-    model_paths = [
-        "final_DQNet2+_50_7.pth",
-    ]
-
-    tasks = [
-        (model_class, model_path, num_robots)
-        for model_class, model_path in zip(model_classes, model_paths)
-        for num_robots in range(10, 81, 10)
-    ]
-
-    with ProcessPoolExecutor(max_workers=4) as executor:
-        list(executor.map(run_task, tasks))
+    pass

@@ -21,6 +21,7 @@ class Depot:
 
     def _clear_tasks(self):
         self.tasks = []
+        self.finnished_tasks = []
 
     def __hash__(self):
         return hash(self.pos)

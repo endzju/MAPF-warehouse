@@ -1,7 +1,7 @@
+import copy
 import random
 import time
 from collections import deque
-from itertools import product
 from pathlib import Path
 
 import numpy as np
@@ -136,16 +136,18 @@ def train(
     env_step_limit: int,
     env_task_length: int,
     env_num_tasks: int,
-    model_class: nn.Module,
+    model_class: type,
     num_episodes: int,
     epsilon: float,
     epsilon_min: float,
     epsilon_decay: float,
     epsilon_episodes: int,
+    in_model: nn.Module = None,
     device: torch.device = torch.device("cpu"),
     plot: bool = True,
     save_plot_data: bool = False,
     lr=1e-4,
+    is_tuned: bool = False,
 ) -> tuple[list[nn.Module], list[float], list[float]]:
     """
     Train a model.
@@ -167,16 +169,15 @@ def train(
 
     view_size = env.agent_view_size
     nn_path = Path(__file__).parent.parent / "neural_networks"
-    model_path = nn_path / "models"
-    plot_path = nn_path / "plots"
-    history_path = nn_path / "history"
-    model_path.mkdir(exist_ok=True)
+    plot_path = nn_path / "plots" / f"{model_class.__name__}"
     plot_path.mkdir(exist_ok=True)
-    history_path.mkdir(exist_ok=True)
 
     vshape = (4, view_size, view_size)
+
     policy_net = model_class(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
     target_net = model_class(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
+    if in_model is not None:
+        policy_net.load_state_dict(in_model.state_dict())
     target_net.load_state_dict(policy_net.state_dict())
 
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=lr)
@@ -221,7 +222,7 @@ def train(
             if done:
                 message = "TIMEOUT" if truncated else "SUCCESS"
                 print(
-                    f"{message}, tasks completed: {env.get_num_tasks_completed()}",
+                    f"{message}, tasks completed: {env.get_num_tasks_completed()}/{len(env.tasks)}",
                     end="",
                 )
                 completed_tasks[episode] = env.get_num_tasks_completed()
@@ -245,12 +246,12 @@ def train(
         tic = time.time()
         agent_brain.update_epsilon()
 
-        # Every {update_episodes} episodes update Target Network and save model to history
+        # Every {update_episodes} episodes update Target Network and add model to history
         if (episode + 1) % update_episodes == 0:
-            model_history.append(policy_net.state_dict())
+            model_history.append(copy.deepcopy(policy_net))
             target_net.load_state_dict(policy_net.state_dict())
-
-    filename = f"{model_class.__name__}_{env_max_robots}_{env_agent_view_size}"
+    infix = "_tuned" if is_tuned else ""
+    filename = f"{model_class.__name__}{infix}_{env_max_robots}_{env_agent_view_size}"
     avg_completed_tasks = get_window_avg(completed_tasks, update_episodes)
     avg_completion_steps = get_window_avg(completion_steps, update_episodes)
 
@@ -262,8 +263,6 @@ def train(
             filename=filename,
             save_plot_data=save_plot_data,
             window_size=update_episodes,
-            start_eps=epsilon,
-            epsilon_decay=epsilon_decay,
         )
         plot_avg_stepcount(
             avg_completion_steps=avg_completion_steps,
@@ -271,17 +270,13 @@ def train(
             filename=filename,
             save_plot_data=save_plot_data,
             window_size=update_episodes,
-            start_eps=epsilon,
-            epsilon_decay=epsilon_decay,
         )
 
     return model_history, avg_completed_tasks, avg_completion_steps
 
 
 def run_training(
-    model_classes: list[nn.Module],
-    num_robot_list: list[int],
-    view_sizes: list[int],
+    model_configs: list[tuple[type, int, int]],
     params: dict,
 ) -> list[tuple[list[nn.Module], list[int], list[int]]]:
     """
@@ -293,15 +288,15 @@ def run_training(
         list[float]: List of steps per episode.
 
     """
-    print("Training...")
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
+    print("Training...")
 
+    params = params.copy()
     training_results = []
 
-    for model_class, num_robots, view_size in product(
-        model_classes, num_robot_list, view_sizes
-    ):
+    for model_class, num_robots, view_size in model_configs:
         params["model_class"] = model_class
         params["env_max_robots"] = num_robots
         params["env_num_tasks"] = num_robots * 5
