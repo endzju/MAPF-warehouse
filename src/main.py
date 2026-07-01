@@ -5,15 +5,13 @@ from pathlib import Path
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
 from src.models.depot import Depot
-from src.neural_networks.CNN.cnn import CNN1  # noqa: F401
-from src.neural_networks.MLP.mlp import MLP1, MLP2, MLP3  # noqa: F401
 from utils.load import load_model
 
 
 def main(
-    model_path="DQN_model_5.pth",
-    env: MultiRobotGridEnv = None,
-    model_class: MLP1 | MLP2 | MLP3 = MLP1,
+    model_class: type,
+    model_path: Path,
+    env: MultiRobotGridEnv,
     render=True,
 ):
 
@@ -91,7 +89,7 @@ if __name__ == "__main__":
     # model_path = "final_CNN1+_50_7.pth"
     model_path = "final_DQNet2+_50_7.pth"
     # model_classes = [CNN1]
-    model_classes = [MLP2]
+    model_classes = []
     model_paths = [model_path]
 
     data_path = Path(__file__).parent / "data" / "times"

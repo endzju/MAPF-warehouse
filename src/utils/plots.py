@@ -58,11 +58,14 @@ def plot_avg_stepcount(
 
 
 def plot_delivery_quality(models: list[nn.Module], view_sizes: list[int]):
+    # TODO complete change
     data = defaultdict(list)
     data_path = Path(__file__).parent.parent / "data" / "times"
     for num_robots in range(10, 81, 10):
         for model, view_size in zip(models, view_sizes, strict=True):
-            filename = data_path / f"{model.__name__}_{num_robots}_{view_size}.json"
+            filename = (
+                data_path / f"{model.__name__}_robots{num_robots}_view{view_size}.json"
+            )
             with open(filename, "r", encoding="utf-8") as f:
                 data[f"{model.__name__}_{view_size}"].append(json.load(f))
 

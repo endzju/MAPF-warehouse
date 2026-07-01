@@ -8,8 +8,6 @@ from torch import nn
 
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
-from src.neural_networks.CNN.cnn import CNN1  # noqa: F401
-from src.neural_networks.MLP.mlp import MLP1, MLP2, MLP3  # noqa: F401
 
 
 def run_simulation(
@@ -151,7 +149,7 @@ def run_evaluation(
         for num_robots, stats in zip(num_robot_list, result, strict=True)
     }
     infix = "_tuned" if is_tuned else ""
-    filename = f"{model.__class__.__name__}{infix}_{train_num_robots}_{view_size}.json"
+    filename = f"{model.__class__.__name__}{infix}_robots{train_num_robots}_view{view_size}.json"
     full_path = data_path / filename
     with open(full_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)

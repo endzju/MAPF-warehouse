@@ -11,8 +11,6 @@ import torch.nn.functional as F
 
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
-from src.neural_networks.CNN.cnn import CNN1  # noqa: F401
-from src.neural_networks.MLP.mlp import MLP1, MLP2, MLP3  # noqa: F401
 from src.utils.plots import plot_avg_completed_tasks_percentage, plot_avg_stepcount
 
 
@@ -184,7 +182,7 @@ def train(
     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
 
     batch_size = 512 * 8
-    num_batches = 50
+    num_batches = 2 * env_max_robots
     update_episodes = 10
 
     memory = EfficientReplayBuffer(
@@ -251,7 +249,7 @@ def train(
             model_history.append(copy.deepcopy(policy_net))
             target_net.load_state_dict(policy_net.state_dict())
     infix = "_tuned" if is_tuned else ""
-    filename = f"{model_class.__name__}{infix}_{env_max_robots}_{env_agent_view_size}"
+    filename = f"{model_class.__name__}{infix}_robots{env_max_robots}_view{env_agent_view_size}"
     avg_completed_tasks = get_window_avg(completed_tasks, update_episodes)
     avg_completion_steps = get_window_avg(completion_steps, update_episodes)
 
@@ -288,11 +286,7 @@ def run_training(
         list[float]: List of steps per episode.
 
     """
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Device: {device}")
     print("Training...")
-
     params = params.copy()
     training_results = []
 

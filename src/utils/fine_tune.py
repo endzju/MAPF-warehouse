@@ -1,7 +1,5 @@
 from torch import nn
 
-from src.neural_networks.CNN.cnn import CNN1  # noqa: F401
-from src.neural_networks.MLP.mlp import MLP1, MLP2, MLP3  # noqa: F401
 from src.utils.train import train
 
 
