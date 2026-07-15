@@ -167,6 +167,24 @@ class MultiRobotGridEnv(gym.Env):
         empty_cells = all_cells - occupied_cells
         return empty_cells
 
+    def get_all_occupied_cells(
+        self, include_next_pos: bool = True
+    ) -> set[tuple[int, int]]:
+        occupied_cells = set()
+        for agent in self.agents:
+            occupied_cells.add(agent.pos)
+            if include_next_pos and agent.next_pos is not None:
+                occupied_cells.add(agent.next_pos)
+        return occupied_cells
+
+    def get_agent_view_cells(self, agent: DeliveryRobot):
+        ax, ay = agent.pos
+        cells = set()
+        for dx in range(-self.agent_view_size // 2, self.agent_view_size // 2 + 1):
+            for dy in range(-self.agent_view_size // 2, self.agent_view_size // 2 + 1):
+                cells.add((ax + dx, ay + dy))
+        return cells
+
     def reset(self, seed=None, options=None):
         self.step_count = 0
         self.avg_manhattan_distance = 0
@@ -244,7 +262,6 @@ class MultiRobotGridEnv(gym.Env):
         # actions to array np. [akcja_robota_0, akcja_robota_1, ...]
         observations = {}
         rewards = {}
-        self._calc_padded_obstacle_grid()
 
         previous_empty_cells = self.get_empty_cells(is_depot_obstacle=False)
         empty_cells = set(previous_empty_cells)
@@ -282,9 +299,16 @@ class MultiRobotGridEnv(gym.Env):
                 agent.in_depot.max_robots += 1
         self.agents -= remove_agents
 
+        all_agent_positions = self.get_all_occupied_cells(include_next_pos=False)
+        all_agent_goal_positions = {agent.goal_pos for agent in self.agents}
+
         for agent in self.agents:
             if not agent.is_done():
-                observations[agent.id] = self._get_obs(agent)
+                observations[agent.id] = self._get_obs(
+                    agent=agent,
+                    all_agent_positions=all_agent_positions,
+                    all_agent_goal_positions=all_agent_goal_positions,
+                )
         truncated = self.step_count >= self.step_limit
         terminated = self._all_tasks_completed()
 
@@ -363,7 +387,14 @@ class MultiRobotGridEnv(gym.Env):
             self.obstacles, pad_width=radius, mode="constant", constant_values=1
         )
 
-    def _get_obs(self, agent: DeliveryRobot, is_dummy=False) -> dict[str, np.ndarray]:
+    def _get_obs(
+        self,
+        agent: DeliveryRobot,
+        all_agent_positions: set[tuple[int, int]],
+        all_agent_goal_positions: set[tuple[int, int]],
+        is_dummy=False,
+    ) -> dict[str, np.ndarray]:
+        view = np.zeros((4, self.agent_view_size, self.agent_view_size), dtype=np.uint8)
         radius = self.agent_view_size // 2
 
         if is_dummy:
@@ -375,15 +406,6 @@ class MultiRobotGridEnv(gym.Env):
                 "goal_vector": np.zeros(shape=(2,), dtype=np.float32),
             }
 
-        other_agent_positions = np.zeros(
-            shape=(self.agent_view_size, self.agent_view_size), dtype=np.uint8
-        )
-        other_agent_goals = np.zeros(
-            shape=(self.agent_view_size, self.agent_view_size), dtype=np.uint8
-        )
-        agent_goal = np.zeros(
-            shape=(self.agent_view_size, self.agent_view_size), dtype=np.uint8
-        )
         ax, ay = agent.pos
         padded_ax = ax + radius
         padded_ay = ay + radius
@@ -392,22 +414,29 @@ class MultiRobotGridEnv(gym.Env):
             padded_ax - radius : padded_ax + radius + 1,
         ]
 
-        for other_agent in self.agents:
-            if other_agent == agent:
-                continue
-            for cell in other_agent.get_occupied_cells():
-                self._add_if_in_view(agent, cell, other_agent_positions)
+        all_agent_positions.remove(agent.pos)
+        all_agent_goal_positions.remove(agent.goal_pos)
 
-            self._add_if_in_view(agent, other_agent.goal_pos, other_agent_goals)
+        agent_view_cells = self.get_agent_view_cells(agent=agent)
+        for cell in agent_view_cells & all_agent_positions:
+            view_pos = self._view_position(agent, cell)
+            view[1, view_pos[0], view_pos[1]] = 1
 
-        self._add_if_in_view(agent, agent.goal_pos, agent_goal)
+        for cell in agent_view_cells & all_agent_goal_positions:
+            view_pos = self._view_position(agent, cell)
+            view[2, view_pos[0], view_pos[1]] = 1
+
+        self._add_if_in_view(agent, agent.goal_pos, view[3])
 
         goal_vector = self._goal_vector(agent)
 
+        all_agent_positions.add(agent.pos)
+        all_agent_goal_positions.add(agent.goal_pos)
+
+        view[0] = obstacles
+
         return {
-            "view": np.stack(
-                [obstacles, other_agent_positions, other_agent_goals, agent_goal]
-            ),
+            "view": view,
             "goal_vector": goal_vector,
         }
 
@@ -624,6 +653,11 @@ class MultiRobotGridEnv(gym.Env):
         text = f"Avg Delivery time: {delivery_text}"
         rendered_text = self.info_font.render(text, True, (0, 0, 0))
         canvas.blit(rendered_text, (current_w - 350, 50))
+
+        text = f"Delivery efficiency: {100 * self.avg_delivery_time / self.avg_manhattan_distance:.2f}%"
+        rendered_text = self.info_font.render(text, True, (0, 0, 0))
+        canvas.blit(rendered_text, (current_w - 350, 80))
+
         if paused:
             text = "PAUSED"
             rendered_text = self.alert_font.render(text, True, (200, 0, 0))

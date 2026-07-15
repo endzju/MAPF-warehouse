@@ -52,7 +52,7 @@ class ActionAgent:
             q_values = self.model(views_tensor, goals_tensor)
             network_actions = q_values.argmax(dim=1).cpu().numpy()
 
-        for idx, action in zip(network_indices, network_actions):
+        for idx, action in zip(network_indices, network_actions, strict=True):
             actions[idx] = int(action)
         return actions
 

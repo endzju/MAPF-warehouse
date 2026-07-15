@@ -1,10 +1,30 @@
 import json
-from collections import defaultdict
+from itertools import product
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 from torch import nn
+
+plot_colors = [
+    "#000000",  # black
+    "#E69F00",  # orange
+    "#56B4E9",  # sky blue
+    "#009E73",  # bluish green
+    "#F0E442",  # yellow
+    "#CC79A7",  # reddish purple
+    "#332288",  # dark blue
+    "#117733",  # green
+    "#FBF2C4",  # sand
+    "#262626",  # grey
+]
+
+plot_lines = [
+    "-",
+    "--",
+    ":",
+    "-.",
+]
 
 
 def plot_avg_completed_tasks_percentage(
@@ -57,49 +77,116 @@ def plot_avg_stepcount(
         np.savetxt(txt_path, avg_completion_steps, fmt="%d")
 
 
-def plot_delivery_quality(models: list[nn.Module], view_sizes: list[int]):
-    # TODO complete change
-    data = defaultdict(list)
-    data_path = Path(__file__).parent.parent / "data" / "times"
-    for num_robots in range(10, 81, 10):
-        for model, view_size in zip(models, view_sizes, strict=True):
-            filename = (
-                data_path / f"{model.__name__}_robots{num_robots}_view{view_size}.json"
-            )
-            with open(filename, "r", encoding="utf-8") as f:
-                data[f"{model.__name__}_{view_size}"].append(json.load(f))
+def read_model_data(
+    model: nn.Module, batch_size: int, num_robots: int, view_size: int
+) -> dict:
+    data_path = Path(__file__).parent.parent / "data" / "times" / model.display_name
+    filename = (
+        data_path
+        / f"{model.display_name}_b{batch_size}_r{num_robots}_v{view_size}.json"
+    )
+    with open(filename, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-    # Wykres longer_delivery
+
+def read_models_data(
+    models: list[nn.Module],
+    batch_sizes: list[int],
+    num_robot_list: list[int],
+    view_sizes: list[int],
+):
+    data = {}
+    for (
+        model,
+        batch_size,
+        num_robots,
+        view_size,
+    ) in list(product(models, batch_sizes, num_robot_list, view_sizes)):
+        data[f"{model.display_name}_b{batch_size}_r{num_robots}_v{view_size}"] = (
+            read_model_data(model, batch_size, num_robots, view_size)
+        )
+
+    return data
+
+
+def plot_delivery_efficiency(
+    models: list[nn.Module],
+    batch_sizes: list[int],
+    num_robot_list: list[int],
+    view_sizes: list[int],
+    x_ticks: list[int | str],
+):
+    global plot_colors
+    x_ticks_set = {str(tick) for tick in x_ticks}
+    data = read_models_data(
+        models=models,
+        batch_sizes=batch_sizes,
+        num_robot_list=num_robot_list,
+        view_sizes=view_sizes,
+    )
     plt.figure(figsize=(10, 6))
-    for key, values in data.items():
-        x = [v["num_robots"] for v in values]
-        y = [round(v["longer_delivery"] * 100, 1) for v in values]
+    for i, (model_name, evaluation) in enumerate(data.items()):
+        evaluation = {k: v for k, v in evaluation.items() if k in x_ticks_set}
+        evaluation = dict(sorted(evaluation.items(), key=lambda item: int(item[0])))
+        x = [num_robots for num_robots in evaluation.keys()]
+        y = [
+            round(eval_info["movement_efficiency"] * 100, 2)
+            for eval_info in evaluation.values()
+        ]
 
-        plt.plot(x, y, marker="o", label=key)
+        plt.plot(
+            x,
+            y,
+            label=model_name,
+            color=plot_colors[i % len(plot_colors)],
+            linestyle=plot_lines[(i // len(plot_colors)) % len(plot_lines)],
+            marker="o",
+        )
 
     plt.xlabel("Number of Robots")
-    plt.ylabel("Delivery length relative to optimum [%]")
-    plt.title("Delivery Efficiency")
+    plt.ylabel("Movement length relative to optimum [%]")
+    plt.title("Movement Efficiency")
     plt.ylim(bottom=100)
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    path = (
-        Path(__file__).parent.parent
-        / "neural_networks"
-        / "plots"
-        / "delivery_efficiency.png"
+    results_path = (
+        Path(__file__).parent.parent / "neural_networks" / "plots" / "results"
     )
+    results_path.mkdir(parents=True, exist_ok=True)
+    path = results_path / "delivery_efficiency.png"
     plt.savefig(path, dpi=300, bbox_inches="tight")
     plt.close()
 
-    # Wykres throughput
-    plt.figure(figsize=(10, 6))
-    for key, values in data.items():
-        x = [v["num_robots"] for v in values]
-        y = [round(v["robot_throughput_per_100ticks"]) for v in values]
 
-        plt.plot(x, y, marker="o", label=key)
+def plot_delivery_throughput(
+    models: list[nn.Module],
+    batch_sizes: list[int],
+    num_robot_list: list[int],
+    view_sizes: list[int],
+    x_ticks: list[str | int],
+):
+    global plot_colors
+    x_ticks_set = {str(tick) for tick in x_ticks}
+    data = read_models_data(models, batch_sizes, num_robot_list, view_sizes)
+    plt.figure(figsize=(10, 6))
+    for i, (model_name, evaluation) in enumerate(data.items()):
+        evaluation = {k: v for k, v in evaluation.items() if k in x_ticks_set}
+        evaluation = dict(sorted(evaluation.items(), key=lambda item: int(item[0])))
+        x = [num_robots for num_robots in evaluation.keys()]
+        y = [
+            round(eval_info["robot_throughput_per_100ticks"], 2)
+            for eval_info in evaluation.values()
+        ]
+
+        plt.plot(
+            x,
+            y,
+            label=model_name,
+            color=plot_colors[i % len(plot_colors)],
+            linestyle=plot_lines[(i // len(plot_colors)) % len(plot_lines)],
+            marker="o",
+        )
 
     plt.xlabel("Number of Robots")
     plt.ylabel("Avg Robot throughput per 100 ticks")
@@ -107,15 +194,14 @@ def plot_delivery_quality(models: list[nn.Module], view_sizes: list[int]):
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    path = (
-        Path(__file__).parent.parent
-        / "neural_networks"
-        / "plots"
-        / "delivery_throughput.png"
+    results_path = (
+        Path(__file__).parent.parent / "neural_networks" / "plots" / "results"
     )
+    results_path.mkdir(parents=True, exist_ok=True)
+    path = results_path / "delivery_throughput.png"
     plt.savefig(str(path), dpi=300, bbox_inches="tight")
     plt.close()
 
 
 if __name__ == "__main__":
-    plot_delivery_quality()
+    pass

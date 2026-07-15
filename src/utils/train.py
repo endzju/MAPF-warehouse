@@ -134,18 +134,17 @@ def train(
     env_step_limit: int,
     env_task_length: int,
     env_num_tasks: int,
-    model_class: type,
+    model: nn.Module,
     num_episodes: int,
     epsilon: float,
     epsilon_min: float,
     epsilon_decay: float,
     epsilon_episodes: int,
-    in_model: nn.Module = None,
+    num_batches: int,
     device: torch.device = torch.device("cpu"),
     plot: bool = True,
     save_plot_data: bool = False,
     lr=1e-4,
-    is_tuned: bool = False,
 ) -> tuple[list[nn.Module], list[float], list[float]]:
     """
     Train a model.
@@ -167,22 +166,18 @@ def train(
 
     view_size = env.agent_view_size
     nn_path = Path(__file__).parent.parent / "neural_networks"
-    plot_path = nn_path / "plots" / f"{model_class.__name__}"
+    plot_path = nn_path / "plots" / f"{model.display_name}"
     plot_path.mkdir(exist_ok=True)
 
     vshape = (4, view_size, view_size)
 
-    policy_net = model_class(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
-    target_net = model_class(view_shape=vshape, goal_vec_size=2, n_actions=5).to(device)
-    if in_model is not None:
-        policy_net.load_state_dict(in_model.state_dict())
-    target_net.load_state_dict(policy_net.state_dict())
+    policy_net = model.to(device)
+    target_net = copy.deepcopy(model).to(device)
 
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=lr)
     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
 
     batch_size = 512 * 8
-    num_batches = 2 * env_max_robots
     update_episodes = 10
 
     memory = EfficientReplayBuffer(
@@ -240,16 +235,18 @@ def train(
         for _ in range(num_batches):
             batch = memory.sample(batch_size)
             optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler)
-        print(f" {time.time() - tic:.2f}s ---")
+        print(f" {time.time() - tic:.2f}s ---", end="\r")
         tic = time.time()
         agent_brain.update_epsilon()
 
         # Every {update_episodes} episodes update Target Network and add model to history
         if (episode + 1) % update_episodes == 0:
-            model_history.append(copy.deepcopy(policy_net))
+            model_history.append(copy.deepcopy(policy_net).cpu())
             target_net.load_state_dict(policy_net.state_dict())
-    infix = "_tuned" if is_tuned else ""
-    filename = f"{model_class.__name__}{infix}_robots{env_max_robots}_view{env_agent_view_size}"
+    print()
+    filename = (
+        f"{model.display_name}_b{num_batches}_r{env_max_robots}_v{env_agent_view_size}"
+    )
     avg_completed_tasks = get_window_avg(completed_tasks, update_episodes)
     avg_completion_steps = get_window_avg(completion_steps, update_episodes)
 
@@ -274,7 +271,10 @@ def train(
 
 
 def run_training(
-    model_configs: list[tuple[type, int, int]],
+    model: nn.Module,
+    num_robots: int,
+    view_size: int,
+    num_batches: int,
     params: dict,
 ) -> list[tuple[list[nn.Module], list[int], list[int]]]:
     """
@@ -286,28 +286,14 @@ def run_training(
         list[float]: List of steps per episode.
 
     """
-    print("Training...")
     params = params.copy()
-    training_results = []
+    params["model"] = model
+    params["env_max_robots"] = num_robots
+    params["env_num_tasks"] = num_robots * 5
+    params["env_agent_view_size"] = view_size
+    params["num_batches"] = num_batches
 
-    for model_class, num_robots, view_size in model_configs:
-        params["model_class"] = model_class
-        params["env_max_robots"] = num_robots
-        params["env_num_tasks"] = num_robots * 5
-        params["env_agent_view_size"] = view_size
-
-        print(
-            f"Training model: {model_class.__name__}, num robots: {num_robots}, view size: {view_size}"
-        )
-        training_results.append(
-            train(
-                **params,
-            )
-        )
-        print("model trained")
-
-    print("Training done")
-    return training_results
+    return train(**params)
 
 
 if __name__ == "__main__":
