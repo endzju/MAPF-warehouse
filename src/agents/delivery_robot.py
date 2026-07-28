@@ -11,21 +11,14 @@ class DeliveryRobot:
     pos: tuple[int, int]
     task: Task
     depot: Depot
-
     id: int
     was_blocked: bool
-
     finish_times: dict[TaskType, int]
-
     step_count: int
-
     goal_pos: tuple[int, int] | None
     task_type: TaskType | None
-
     next_pos: tuple[int, int] | None
-
     pos_history: deque[tuple[int, int]]
-
     idle_time: int
 
     def __init__(
@@ -49,7 +42,7 @@ class DeliveryRobot:
         }
         self.step_count: int = 0
 
-        self.goal_pos, self.task_type = self.task.pop_next()
+        self.goal_pos, self.task_type = None, None
         self.next_pos = None
         self.pos_history = deque()
         self.idle_time = 0
@@ -58,6 +51,9 @@ class DeliveryRobot:
         """
         Returns True if robot should be removed
         """
+        if self.goal_pos is None and not self.task.is_completed():
+            self.goal_pos, self.task_type = self.task.pop_next()
+
         # update step count
         self.step_count += 1
 
@@ -155,6 +151,13 @@ class DeliveryRobot:
         elif pos is None:
             raise ValueError("Agent has no position")
         return abs(pos[0] - self.goal_pos[0]) + abs(pos[1] - self.goal_pos[1])
+
+    def reset(self):
+        self.idle_time = 0
+        self.step_count = 0
+        self.was_blocked = False
+        self.pos_history = deque()
+        self.next_pos = None
 
     def __eq__(self, other: "DeliveryRobot"):
         return isinstance(other, DeliveryRobot) and self.id == other.id

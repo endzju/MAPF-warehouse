@@ -15,11 +15,11 @@ from src.utils.train import run_training
 def get_best_model(
     result: tuple[list[nn.Module], list[float], list[float]], step_limit: int
 ):
-    models, avg_tasks, avg_steps = result
-    if set(avg_steps) == {step_limit}:
-        return models[int(np.argmax(avg_tasks))]
+    models, avg_completed_tasks, avg_delivery_times, _ = result
+    if len(set(avg_delivery_times)) == 1:
+        return models[int(np.argmax(avg_completed_tasks))]
     else:
-        return models[int(np.argmin(avg_steps))]
+        return models[int(np.argmin(avg_delivery_times))]
 
 
 def get_best_models(
@@ -34,8 +34,14 @@ def get_best_models(
     return best_models
 
 
-def load_model(model: nn.Module, num_robots: int, view_size: int, num_batches: int):
-    filename = f"{model.display_name}_b{num_batches}_r{num_robots}_v{view_size}.pth"
+def load_model(
+    model: nn.Module,
+    num_robots: int,
+    view_size: int,
+    num_batches: int,
+    update_episodes: int,
+):
+    filename = f"{model.display_name}_b{num_batches}_r{num_robots}_v{view_size}_u{update_episodes}.pth"
     path = (
         Path(__file__).parent.parent
         / "neural_networks"
@@ -55,40 +61,42 @@ def run_experiments(train: bool = True, eval: bool = True):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    view_shape = (4, 5, 5)
+    view_dims = 4
     goal_vec_size = 2
-
-    model_params = {
-        "input_size": view_shape[0] * view_shape[1] * view_shape[2] + goal_vec_size,
-        "output_size": 5,
-    }
+    n_actions = 5
 
     # CONFIG
     model_classes = [MLP]
     hidden_layers_list = [
-        [16],
-        [32],
-        [64],
-        [128],
-        [128, 64],
+        # [16],
+        # [32],
+        # [64],
+        # [128],
+        # [128, 64],
         [256, 128],
-        [512, 256],
-        [1024, 512],
-        [128, 64, 32],
-        [256, 128, 64],
-        [512, 256, 128],
-        [1024, 512, 256],
+        # [512, 256],
+        # [1024, 512],
+        # [128, 64, 32],
+        # [256, 128, 64],
+        # [512, 256, 128],
+        # [1024, 512, 256],
     ]
-    train_robot_list = [40]
-    train_num_batches_list = [25]
+    train_robot_list = [60]
+    train_num_batches_list = [10]
     train_view_sizes = [5]
+    train_update_episodes = [10]
 
-    eval_robot_list = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    eval_robot_list = [n for n in range(10, 101, 5)]
 
     models = [
-        m(hidden_layers=h, **model_params)
-        for m, h in product(model_classes, hidden_layers_list)
+        m(
+            hidden_layers=h,
+            input_size=view_dims * v * v + goal_vec_size,
+            output_size=n_actions,
+        )
+        for m, h, v in product(model_classes, hidden_layers_list, train_view_sizes)
     ]
+    steps_per_robot = 20
     base_params = {
         "num_episodes": 1000,
         "env_grid_size": (20, 20),
@@ -96,7 +104,6 @@ def run_experiments(train: bool = True, eval: bool = True):
         "env_task_length": 3,
         "device": device,
         "plot": True,
-        "save_plot_data": False,
         "epsilon": 1.0,
         "epsilon_min": 0.01,
         "epsilon_decay": 0.995,
@@ -104,11 +111,17 @@ def run_experiments(train: bool = True, eval: bool = True):
     }
 
     model_configs = list(
-        product(models, train_robot_list, train_view_sizes, train_num_batches_list)
+        product(
+            models,
+            train_robot_list,
+            train_view_sizes,
+            train_num_batches_list,
+            train_update_episodes,
+        )
     )
 
-    for model, num_robots, view_size, num_batches in model_configs:
-        filename = f"{model.display_name}_b{num_batches}_r{num_robots}_v{view_size}.pth"
+    for model, num_robots, view_size, num_batches, update_episodes in model_configs:
+        filename = f"{model.display_name}_b{num_batches}_r{num_robots}_v{view_size}_u{update_episodes}.pth"
 
         # TRAINING
         if not train:
@@ -117,19 +130,23 @@ def run_experiments(train: bool = True, eval: bool = True):
                 num_robots=num_robots,
                 view_size=view_size,
                 num_batches=num_batches,
+                update_episodes=update_episodes,
             )
         should_train = train or best_trained_model is None
         if should_train:
             tic = time.time()
             print(
-                f"Training model: {model.display_name}, num robots: {num_robots}, view size: {view_size}, num batches: {num_batches}"
+                f"Training model: {model.display_name}, num robots: {num_robots}, view size: {view_size}, num batches: {num_batches}, update episodes: {update_episodes}"
             )
+            params = base_params.copy()
+            params["env_step_limit"] = steps_per_robot * num_robots
             train_results = run_training(
                 model=model,
                 num_robots=num_robots,
                 view_size=view_size,
                 num_batches=num_batches,
-                params=base_params.copy(),
+                update_episodes=update_episodes,
+                params=params.copy(),
             )
             print("model trained")
 
@@ -161,8 +178,9 @@ def run_experiments(train: bool = True, eval: bool = True):
                 train_num_robots=num_robots,
                 view_size=view_size,
                 num_batches=num_batches,
+                update_episodes=update_episodes,
                 params=base_params.copy(),
-                num_simulations=30,
+                num_simulations=50,
                 num_processes=3,
             )
             elapsed = time.time() - tic
@@ -171,9 +189,9 @@ def run_experiments(train: bool = True, eval: bool = True):
 
 if __name__ == "__main__":
     print("Running experiments...")
-    run_experiments(train=False, eval=True)
+    run_experiments(train=True, eval=True)
     # try:
-    #     run_experiments(train=False, eval=True)
+    #     run_experiments(train=False, eval=False)
     # except KeyboardInterrupt:
     #     print("Stopped experiments")
     # except Exception as e:

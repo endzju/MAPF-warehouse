@@ -1,4 +1,4 @@
-from src.neural_networks.MLP.mlp import MLP  # noqa F401
+from src.neural_networks.MLP.mlp import MLP
 from src.utils.plots import plot_delivery_efficiency, plot_delivery_throughput
 
 if __name__ == "__main__":
@@ -12,18 +12,17 @@ if __name__ == "__main__":
         [256, 128],
         [512, 256],
         [1024, 512],
-        [64, 128],
-        [128, 256],
-        [256, 512],
-        # [128, 64, 32],
-        # [256, 128, 64],
-        # [512, 256, 128],
-        # [1024, 512, 256],
+        [128, 64, 32],
+        [256, 128, 64],
+        [512, 256, 128],
+        [1024, 512, 256],
     ]
-    batch_sizes = [25]
-    num_robot_list = [40]
-    x_ticks = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    num_robot_list = [60]
+    batch_sizes = [70]
     view_sizes = [5]
+    update_episodes_list = [20]
+
+    x_ticks = [n for n in range(10, 101, 5)]
 
     models = []
     for hidden_layers in hidden_layers_list:
@@ -37,6 +36,7 @@ if __name__ == "__main__":
         batch_sizes=batch_sizes,
         num_robot_list=num_robot_list,
         view_sizes=view_sizes,
+        update_episodes_list=update_episodes_list,
         x_ticks=x_ticks,
     )
 
@@ -45,5 +45,6 @@ if __name__ == "__main__":
         batch_sizes=batch_sizes,
         num_robot_list=num_robot_list,
         view_sizes=view_sizes,
+        update_episodes_list=update_episodes_list,
         x_ticks=x_ticks,
     )

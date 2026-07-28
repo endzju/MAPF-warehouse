@@ -15,7 +15,9 @@ from src.utils.enums import TaskType
 
 ctypes.windll.shcore.SetProcessDpiAwareness(1)
 
-import pygame  # noqa: E402
+import time
+
+import pygame
 
 
 class MultiRobotGridEnv(gym.Env):
@@ -28,16 +30,12 @@ class MultiRobotGridEnv(gym.Env):
         output_depots: list[Depot] = [],
         step_limit: int = 100,
         task_length: int = 5,
-        finish_times: dict[TaskType, int] = {
-            TaskType.ENTER: 1,
-            TaskType.PICKUP: 1,
-            TaskType.LEAVE: 1,
-        },
+        finish_times: dict[TaskType, int] | None = None,
         tasks: list[Task] = [],
         num_tasks: int = 100,
         max_robots: int = 100,
     ):
-        super(MultiRobotGridEnv, self).__init__()
+        super().__init__()
         self.grid_width, self.grid_height = grid_size
         self.obstacles = np.zeros((self.grid_width, self.grid_height), dtype=np.uint8)
         self.obstacle_set = set()
@@ -46,12 +44,18 @@ class MultiRobotGridEnv(gym.Env):
         self.avg_manhattan_distance = 0
         self.avg_delivery_time = 0
         self.deliveries = 0
-        self.finish_times = finish_times
+        self.finish_times = finish_times or {
+            TaskType.ENTER: 1,
+            TaskType.PICKUP: 1,
+            TaskType.LEAVE: 1,
+        }
         self.given_tasks = tasks
         self.tasks = []
         self.num_tasks = num_tasks
         self.max_robots = max_robots
         self.depot_priority = 0
+        self.float_goal_vec = False
+        self.deleted_agents = []
 
         if obstacles:
             obs = np.array(obstacles, dtype=np.uint8)
@@ -138,14 +142,16 @@ class MultiRobotGridEnv(gym.Env):
     def _increment_depot_priority(self):
         self.depot_priority = (self.depot_priority + 1) % len(self.input_depots)
 
-    def _get_priority_depot_indices(self) -> list[Depot]:
-        depot_indices = []
-        for i in range(len(self.input_depots)):
-            depot_indices.append((i + self.depot_priority) % len(self.input_depots))
+    # def _get_priority_depot_indices(self) -> list[Depot]:
+    #     depot_indices = []
+    #     for i in range(len(self.input_depots)):
+    #         depot_indices.append((i + self.depot_priority) % len(self.input_depots))
 
     def _update_depot_max_robots(self):
         for i in range(len(self.input_depots)):
-            self.input_depots[i].max_robots = self.max_robots // len(self.input_depots)
+            self.input_depots[i].stored_robots = self.max_robots // len(
+                self.input_depots
+            )
 
     def get_empty_cells(
         self, is_depot_obstacle: bool = False, depot_obstacle_radius: int = 0
@@ -238,6 +244,7 @@ class MultiRobotGridEnv(gym.Env):
                 dy = 1
             case 3:  # LEFT
                 dx = -1
+
         return (agent.pos[0] + dx, agent.pos[1] + dy)
 
     def _next_id(self):
@@ -258,7 +265,14 @@ class MultiRobotGridEnv(gym.Env):
             completed += len(depot.finnished_tasks)
         return completed
 
+    time0 = 0
+    time1 = 0
+    time2 = 0
+    time3 = 0
+    time4 = 0
+
     def step(self, actions: list[int]):
+        tic = time.time()
         # actions to array np. [akcja_robota_0, akcja_robota_1, ...]
         observations = {}
         rewards = {}
@@ -267,6 +281,9 @@ class MultiRobotGridEnv(gym.Env):
         empty_cells = set(previous_empty_cells)
         agent_list = list(self.agents)
         self.np_random.shuffle(agent_list)
+
+        self.time0 += time.time() - tic
+        tic = time.time()
 
         for agent in agent_list:
             if agent.id in actions:
@@ -287,6 +304,9 @@ class MultiRobotGridEnv(gym.Env):
                 else:
                     rewards[agent.id] = agent.reward(next_pos, previous_empty_cells)
 
+        self.time1 += time.time() - tic
+        tic = time.time()
+
         remove_agents = set()
         # Move agents and remove those that are done
         for agent in self.agents:
@@ -296,8 +316,12 @@ class MultiRobotGridEnv(gym.Env):
                 ) / (self.deliveries + 1)
                 self.deliveries += 1
                 remove_agents.add(agent)
-                agent.in_depot.max_robots += 1
+                agent.in_depot.stored_robots += 1
         self.agents -= remove_agents
+        self.deleted_agents += list(remove_agents)
+
+        self.time2 += time.time() - tic
+        tic = time.time()
 
         all_agent_positions = self.get_all_occupied_cells(include_next_pos=False)
         all_agent_goal_positions = {agent.goal_pos for agent in self.agents}
@@ -315,22 +339,43 @@ class MultiRobotGridEnv(gym.Env):
         self.step_count += 1
         agent_positions = {agent.pos for agent in self.agents}
 
+        self.time3 += time.time() - tic
+        tic = time.time()
+
         # deploy robot if tasks left
         for in_depot, out_depot in zip(self.input_depots, self.output_depots):
             if (
                 in_depot.pos not in agent_positions
-                and in_depot.max_robots > 0
+                and in_depot.stored_robots > 0
                 and in_depot.has_tasks()
             ):
-                agent = DeliveryRobot(
-                    position=in_depot.pos,
-                    task=in_depot.pop_task(),
-                    in_depot=in_depot,
-                    out_depot=out_depot,
-                    id=self._next_id(),
-                )
+                if len(self.deleted_agents) > 0:
+                    agent = self.deleted_agents.pop()
+                    agent.reset()
+                    agent.pos = in_depot.pos
+                    agent.task = in_depot.pop_task()
+                    agent.in_depot = in_depot
+                    agent.out_depot = out_depot
+                    agent.id = self._next_id()
+                else:
+                    agent = DeliveryRobot(
+                        position=in_depot.pos,
+                        task=in_depot.pop_task(),
+                        in_depot=in_depot,
+                        out_depot=out_depot,
+                        id=self._next_id(),
+                    )
                 self.agents.add(agent)
-                in_depot.max_robots -= 1
+                in_depot.stored_robots -= 1
+
+        self.time4 += time.time() - tic
+
+        # randnum = self.np_random.random()
+        # sum_time = self.time0 + self.time1 + self.time2 + self.time3 + self.time4
+        # if randnum < 0.001 and sum_time > 0:
+        #     print(
+        #         f"time0: {self.time0 / sum_time} time1: {self.time1 / sum_time} time2: {self.time2 / sum_time} time3: {self.time3 / sum_time} time4: {self.time4 / sum_time}"
+        #     )
 
         return observations, rewards, terminated, truncated, {}
 
@@ -377,6 +422,10 @@ class MultiRobotGridEnv(gym.Env):
             dy = -1
         elif dy > 0:
             dy = 1
+
+        if self.float_goal_vec:
+            dx = dx / max_dist
+            dy = dy / max_dist
 
         goal_vec = [dx, dy]
         return np.array(goal_vec, dtype=np.float32)
@@ -444,7 +493,7 @@ class MultiRobotGridEnv(gym.Env):
         out_time_dict = defaultdict(list)
         delivery_time = 0
 
-        # Calculate manhatan time of all tasks of all depots
+        # Calculate manhattan time of all tasks of all depots
         for in_depot, out_depot in zip(self.input_depots, self.output_depots):
             exit_times_heap = []
             exit_times = []
@@ -460,7 +509,7 @@ class MultiRobotGridEnv(gym.Env):
                 for i in range(len(positions) - 1):
                     time += manhattan_distance(positions[i], positions[i + 1])
                 delivery_time += time
-                if len(exit_times_heap) == in_depot.max_robots:
+                if len(exit_times_heap) == in_depot.stored_robots:
                     time_from_start = max(
                         heapq.heappop(exit_times_heap), time_from_start
                     )
@@ -653,8 +702,10 @@ class MultiRobotGridEnv(gym.Env):
         text = f"Avg Delivery time: {delivery_text}"
         rendered_text = self.info_font.render(text, True, (0, 0, 0))
         canvas.blit(rendered_text, (current_w - 350, 50))
-
-        text = f"Delivery efficiency: {100 * self.avg_delivery_time / self.avg_manhattan_distance:.2f}%"
+        if self.avg_delivery_time:
+            text = f"Delivery efficiency: {100 * self.avg_manhattan_distance / self.avg_delivery_time:.2f}%"
+        else:
+            text = "Delivery efficiency: N/A"
         rendered_text = self.info_font.render(text, True, (0, 0, 0))
         canvas.blit(rendered_text, (current_w - 350, 80))
 

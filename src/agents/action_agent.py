@@ -32,28 +32,36 @@ class ActionAgent:
 
     def get_actions(self, obs_dict: dict[dict], device="cpu") -> dict[int, int]:
         actions = {}
-        network_indices = []
-        for idx in obs_dict.keys():
-            if np.random.rand() <= self.epsilon:
-                actions[idx] = int(np.random.randint(self.n_actions))
-            else:
-                network_indices.append(idx)
 
-        if not network_indices:
+        indices = np.fromiter(obs_dict.keys(), dtype=np.int32)
+        mask = np.random.rand(len(indices)) > self.epsilon
+        network_indices = indices[mask]
+        random_indices = indices[~mask]
+        random_actions = np.random.randint(self.n_actions, size=len(random_indices))
+        for idx, action in zip(random_indices, random_actions, strict=True):
+            actions[idx] = int(action)
+
+        if network_indices.size == 0:
             return actions
 
-        views = [obs_dict[i]["view"] for i in network_indices]
-        goals = [obs_dict[i]["goal_vector"] for i in network_indices]
+        views_tensor = torch.as_tensor(
+            np.array([obs_dict[i]["view"] for i in network_indices], dtype=np.float32),
+            device=device,
+        )
+        goals_tensor = torch.as_tensor(
+            np.array(
+                [obs_dict[i]["goal_vector"] for i in network_indices], dtype=np.float32
+            ),
+            device=device,
+        )
 
-        views_tensor = torch.FloatTensor(np.stack(views)).to(device)
-        goals_tensor = torch.FloatTensor(np.stack(goals)).to(device)
-
-        with torch.no_grad():
+        with torch.inference_mode():
             q_values = self.model(views_tensor, goals_tensor)
-            network_actions = q_values.argmax(dim=1).cpu().numpy()
+            network_actions = q_values.argmax(dim=1).cpu()
 
         for idx, action in zip(network_indices, network_actions, strict=True):
             actions[idx] = int(action)
+
         return actions
 
     def update_epsilon(self):

@@ -56,7 +56,7 @@ def evaluate(
         task_length=env_task_length,
         num_tasks=env_num_tasks,
     )
-    manhatan_delivery_times = []
+    manhattan_delivery_times = []
     delivery_times = []
 
     model = model_class(**model_params).cpu()
@@ -64,19 +64,19 @@ def evaluate(
     model.eval()
 
     for i in range(num_simulations):
-        avg_manhatan_delivery_time, avg_delivery_time = run_simulation(
+        avg_manhattan_delivery_time, avg_delivery_time = run_simulation(
             model=model,
             env=env,
             render=False,
         )
-        manhatan_delivery_times.append(avg_manhatan_delivery_time)
+        manhattan_delivery_times.append(avg_manhattan_delivery_time)
         delivery_times.append(avg_delivery_time)
 
-    movement_efficiency = sum(delivery_times) / sum(manhatan_delivery_times)
+    movement_efficiency = sum(delivery_times) / sum(manhattan_delivery_times)
     robot_throughput_per_100ticks = 100 / mean(delivery_times) * env_max_robots
     data = {
-        "manhatan_delivery_times": manhatan_delivery_times,
-        "avg_manhatan_delivery_time": mean(manhatan_delivery_times),
+        "manhattan_delivery_times": manhattan_delivery_times,
+        "avg_manhattan_delivery_time": mean(manhattan_delivery_times),
         "delivery_times": delivery_times,
         "avg_delivery_time": mean(delivery_times),
         "movement_efficiency": movement_efficiency,
@@ -96,6 +96,7 @@ def run_evaluation(
     train_num_robots: int,
     view_size: int,
     num_batches: int,
+    update_episodes: int,
     params: dict,
     num_simulations: int,
     num_processes: int,
@@ -141,9 +142,7 @@ def run_evaluation(
         num_robots: stats
         for num_robots, stats in zip(num_robot_list, result, strict=True)
     }
-    filename = (
-        f"{model.display_name}_b{num_batches}_r{train_num_robots}_v{view_size}.json"
-    )
+    filename = f"{model.display_name}_b{num_batches}_r{train_num_robots}_v{view_size}_u{update_episodes}.json"
     full_path = data_path / filename
     if full_path.exists():
         old_data = json.loads(full_path.read_text(encoding="utf-8"))

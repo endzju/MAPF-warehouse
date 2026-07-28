@@ -6,12 +6,12 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
-from src.utils.plots import plot_avg_completed_tasks_percentage, plot_avg_stepcount
+from src.utils.plots import plot_avg_completed_tasks_percentage, plot_avg_delivery_times
 
 
 class ReplayBuffer:
@@ -136,6 +136,7 @@ def train(
     env_num_tasks: int,
     model: nn.Module,
     num_episodes: int,
+    update_episodes: int,
     epsilon: float,
     epsilon_min: float,
     epsilon_decay: float,
@@ -143,7 +144,6 @@ def train(
     num_batches: int,
     device: torch.device = torch.device("cpu"),
     plot: bool = True,
-    save_plot_data: bool = False,
     lr=1e-4,
 ) -> tuple[list[nn.Module], list[float], list[float]]:
     """
@@ -167,18 +167,20 @@ def train(
     view_size = env.agent_view_size
     nn_path = Path(__file__).parent.parent / "neural_networks"
     plot_path = nn_path / "plots" / f"{model.display_name}"
-    plot_path.mkdir(exist_ok=True)
+    plot_path.mkdir(exist_ok=True, parents=True)
 
     vshape = (4, view_size, view_size)
 
     policy_net = model.to(device)
     target_net = copy.deepcopy(model).to(device)
+    policy_net.train()
+    target_net.eval()
 
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=lr)
     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
 
-    batch_size = 512 * 8
-    update_episodes = 10
+    batch_size = 4096 * 2
+    # update_episodes = 5
 
     memory = EfficientReplayBuffer(
         capacity=500 * batch_size,
@@ -195,7 +197,8 @@ def train(
     )
 
     completed_tasks = [0] * num_episodes
-    completion_steps = [env.step_limit] * num_episodes
+    avg_delivery_times = [0] * num_episodes
+    avg_manhattan_times = [0] * num_episodes
 
     model_history = []
 
@@ -207,10 +210,18 @@ def train(
         done = False
 
         print(f"--- Episode: {episode}, epsilon: {agent_brain.epsilon:.5f} ", end="")
-
+        simulation_tic = time.time()
+        action_time = 0
+        env_step_time = 0
+        memory_push_time = 0
+        policy_net.to("cpu")
         while not done:
-            actions = agent_brain.get_actions(obs_dict=obs, device=device)
+            action_tic = time.time()
+            actions = agent_brain.get_actions(obs_dict=obs, device="cpu")
+            action_time += time.time() - action_tic
+            step_tic = time.time()
             next_obs, rewards, terminated, truncated, _ = env.step(actions)
+            env_step_time += time.time() - step_tic
             done = terminated or truncated
             if done:
                 message = "TIMEOUT" if truncated else "SUCCESS"
@@ -218,10 +229,16 @@ def train(
                     f"{message}, tasks completed: {env.get_num_tasks_completed()}/{len(env.tasks)}",
                     end="",
                 )
-                completed_tasks[episode] = env.get_num_tasks_completed()
-                completion_steps[episode] = env.step_count
+                tasks_completed = env.get_num_tasks_completed()
+                completed_tasks[episode] = tasks_completed
+                avg_delivery_times[episode] = (
+                    tasks_completed * env.avg_delivery_time
+                    + (len(env.tasks) - tasks_completed) * env.step_limit
+                ) / len(env.tasks)
+                avg_manhattan_times[episode] = env.avg_manhattan_distance
 
-            for agent_id in obs.keys():
+            memory_push_tic = time.time()
+            for agent_id in obs:
                 if agent_id in next_obs:
                     memory.push(
                         obs[agent_id],
@@ -230,12 +247,26 @@ def train(
                         next_obs[agent_id],
                         done,
                     )
+            memory_push_time += time.time() - memory_push_tic
             obs = next_obs
 
-        for _ in range(num_batches):
+        print(f", simulation: {time.time() - simulation_tic:.2f}s ", end="")
+        # print(f"(action: {action_time:.2f}s", end="")
+        # print(f", env step: {env_step_time:.2f}s", end="")
+        # print(f", memory push: {memory_push_time:.2f}s)", end="")
+        train_count = min(len(memory) // batch_size, num_batches)
+        optimize_tic = time.time()
+        sample_time = 0
+        policy_net.to(device)
+        for _ in range(train_count):
+            sample_tic = time.time()
             batch = memory.sample(batch_size)
+            sample_time += time.time() - sample_tic
             optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler)
-        print(f" {time.time() - tic:.2f}s ---", end="\r")
+        # print(f"train_count: {train_count}, memory len {len(memory)}", end="")
+        print(f", optimize: {time.time() - optimize_tic:.2f}s ", end="")
+        # print(f"(memory sample: {sample_time:.2f}s)", end="")
+        print(f", episode time: {time.time() - tic:.2f}s ---", end="\r")
         tic = time.time()
         agent_brain.update_epsilon()
 
@@ -244,11 +275,10 @@ def train(
             model_history.append(copy.deepcopy(policy_net).cpu())
             target_net.load_state_dict(policy_net.state_dict())
     print()
-    filename = (
-        f"{model.display_name}_b{num_batches}_r{env_max_robots}_v{env_agent_view_size}"
-    )
+    filename = f"{model.display_name}_b{num_batches}_r{env_max_robots}_v{env_agent_view_size}_u{update_episodes}"
     avg_completed_tasks = get_window_avg(completed_tasks, update_episodes)
-    avg_completion_steps = get_window_avg(completion_steps, update_episodes)
+    window_avg_delivery_times = get_window_avg(avg_delivery_times, update_episodes)
+    window_avg_manhattan_times = get_window_avg(avg_manhattan_times, update_episodes)
 
     if plot:
         plot_avg_completed_tasks_percentage(
@@ -256,18 +286,22 @@ def train(
             max_tasks=env.num_tasks,
             path=plot_path,
             filename=filename,
-            save_plot_data=save_plot_data,
             window_size=update_episodes,
         )
-        plot_avg_stepcount(
-            avg_completion_steps=avg_completion_steps,
+        plot_avg_delivery_times(
+            avg_delivery_times=window_avg_delivery_times,
+            avg_manhattan_times=window_avg_manhattan_times,
             path=plot_path,
             filename=filename,
-            save_plot_data=save_plot_data,
             window_size=update_episodes,
         )
 
-    return model_history, avg_completed_tasks, avg_completion_steps
+    return (
+        model_history,
+        avg_completed_tasks,
+        window_avg_delivery_times,
+        window_avg_manhattan_times,
+    )
 
 
 def run_training(
@@ -275,6 +309,7 @@ def run_training(
     num_robots: int,
     view_size: int,
     num_batches: int,
+    update_episodes: int,
     params: dict,
 ) -> list[tuple[list[nn.Module], list[int], list[int]]]:
     """
@@ -292,6 +327,7 @@ def run_training(
     params["env_num_tasks"] = num_robots * 5
     params["env_agent_view_size"] = view_size
     params["num_batches"] = num_batches
+    params["update_episodes"] = update_episodes
 
     return train(**params)
 

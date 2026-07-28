@@ -8,7 +8,7 @@ class Depot:
         # self.task_history = []
         self.tasks = []
         self.finnished_tasks = []
-        self.max_robots = 1
+        self.stored_robots = 1
 
     def pop_task(self) -> Task:
         return self.tasks.pop()

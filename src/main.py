@@ -54,7 +54,7 @@ def main(
         total_step += 1
         if render:
             env.render()
-            time.sleep(0.1)
+            time.sleep(0.4)
 
     if render:
         time.sleep(1)
@@ -79,13 +79,13 @@ if __name__ == "__main__":
     models_path = Path(__file__).resolve().parent / "neural_networks" / "models"
 
     # CONFIG
-    model_name = "MLP_1024_512_b25_r40_v5.pth"
+    model_name = "MLP_256_128_b10_r60_v5_u10.pth"
     model_dir = model_name.split("_b")[0]
     model_class = MLP
 
     model_path = models_path / model_dir / model_name
     hidden_layers = list(map(int, model_dir.split("_")[1:]))
-    view_size = int(model_name.split("_")[-1].split(".")[0][1:])
+    view_size = int(model_name.split("_v")[1].split("_")[0])
     vshape = (4, view_size, view_size)
     env.agent_view_size = view_size
     goal_vec_size = 2
@@ -98,12 +98,12 @@ if __name__ == "__main__":
     model.load_state_dict(weights_dict)
 
     try:
-        num_robots = 20
-        manhatan_delivery_times = []
+        num_robots = 60
+        manhattan_delivery_times = []
         delivery_times = []
         env.max_robots = num_robots
         env.num_tasks = 500 * num_robots
-        avg_manhatan_delivery_time, avg_delivery_time = main(
+        avg_manhattan_delivery_time, avg_delivery_time = main(
             model=model,
             env=env,
             render=True,
