@@ -11,7 +11,7 @@ from torch import nn
 
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
-from src.utils.plots import plot_avg_completed_tasks_percentage, plot_avg_delivery_times
+from src.utils.plots import plot_avg_delivery_times
 
 
 class ReplayBuffer:
@@ -180,7 +180,6 @@ def train(
     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
 
     batch_size = 4096 * 2
-    # update_episodes = 5
 
     memory = EfficientReplayBuffer(
         capacity=500 * batch_size,
@@ -281,13 +280,13 @@ def train(
     window_avg_manhattan_times = get_window_avg(avg_manhattan_times, update_episodes)
 
     if plot:
-        plot_avg_completed_tasks_percentage(
-            avg_completed_tasks=avg_completed_tasks,
-            max_tasks=env.num_tasks,
-            path=plot_path,
-            filename=filename,
-            window_size=update_episodes,
-        )
+        # plot_avg_completed_tasks_percentage(
+        #     avg_completed_tasks=avg_completed_tasks,
+        #     max_tasks=env.num_tasks,
+        #     path=plot_path,
+        #     filename=filename,
+        #     window_size=update_episodes,
+        # )
         plot_avg_delivery_times(
             avg_delivery_times=window_avg_delivery_times,
             avg_manhattan_times=window_avg_manhattan_times,

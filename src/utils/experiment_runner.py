@@ -12,26 +12,13 @@ from src.utils.evaluate import run_evaluation
 from src.utils.train import run_training
 
 
-def get_best_model(
-    result: tuple[list[nn.Module], list[float], list[float]], step_limit: int
-):
-    models, avg_completed_tasks, avg_delivery_times, _ = result
+def get_best_model(result: tuple[list[nn.Module], list[float], list[float]]):
+    models, avg_completed_tasks, avg_delivery_times, avg_manhattan_times = result
+    ratios = [h / d for d, h in zip(avg_delivery_times, avg_manhattan_times)]
     if len(set(avg_delivery_times)) == 1:
         return models[int(np.argmax(avg_completed_tasks))]
     else:
-        return models[int(np.argmin(avg_delivery_times))]
-
-
-def get_best_models(
-    results: list[tuple[list[nn.Module], list[float], list[float]]], step_limit: int
-) -> list[nn.Module]:
-    best_models = []
-    for models, avg_tasks, avg_steps in results:
-        if set(avg_steps) == {step_limit}:
-            best_models.append(models[int(np.argmax(avg_tasks))])
-        else:
-            best_models.append(models[int(np.argmin(avg_steps))])
-    return best_models
+        return models[int(np.argmax(ratios))]
 
 
 def load_model(
@@ -56,7 +43,7 @@ def load_model(
     return model
 
 
-def run_experiments(train: bool = True, eval: bool = True):
+def run_experiments(force_train: bool = True, eval: bool = True):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
@@ -68,23 +55,22 @@ def run_experiments(train: bool = True, eval: bool = True):
     # CONFIG
     model_classes = [MLP]
     hidden_layers_list = [
-        # [16],
-        # [32],
-        # [64],
-        # [128],
-        # [128, 64],
+        [256],
+        [512],
+        [1024],
+        [128, 64],
         [256, 128],
-        # [512, 256],
-        # [1024, 512],
-        # [128, 64, 32],
-        # [256, 128, 64],
-        # [512, 256, 128],
-        # [1024, 512, 256],
+        [512, 256],
+        [1024, 512],
+        [128, 64, 32],
+        [256, 128, 64],
+        [512, 256, 128],
+        [1024, 512, 256],
     ]
     train_robot_list = [60]
-    train_num_batches_list = [10]
-    train_view_sizes = [5]
-    train_update_episodes = [10]
+    train_num_batches_list = [120]
+    train_view_sizes = [5, 7]
+    train_update_episodes = [60]
 
     eval_robot_list = [n for n in range(10, 101, 5)]
 
@@ -98,14 +84,14 @@ def run_experiments(train: bool = True, eval: bool = True):
     ]
     steps_per_robot = 20
     base_params = {
-        "num_episodes": 1000,
+        "num_episodes": 2000,
         "env_grid_size": (20, 20),
         "env_step_limit": 800,
         "env_task_length": 3,
         "device": device,
         "plot": True,
         "epsilon": 1.0,
-        "epsilon_min": 0.01,
+        "epsilon_min": 0,
         "epsilon_decay": 0.995,
         "epsilon_episodes": math.inf,
     }
@@ -124,7 +110,7 @@ def run_experiments(train: bool = True, eval: bool = True):
         filename = f"{model.display_name}_b{num_batches}_r{num_robots}_v{view_size}_u{update_episodes}.pth"
 
         # TRAINING
-        if not train:
+        if not force_train:
             best_trained_model = load_model(
                 model=model,
                 num_robots=num_robots,
@@ -132,7 +118,7 @@ def run_experiments(train: bool = True, eval: bool = True):
                 num_batches=num_batches,
                 update_episodes=update_episodes,
             )
-        should_train = train or best_trained_model is None
+        should_train = force_train or best_trained_model is None
         if should_train:
             tic = time.time()
             print(
@@ -150,9 +136,7 @@ def run_experiments(train: bool = True, eval: bool = True):
             )
             print("model trained")
 
-            best_trained_model = get_best_model(
-                result=train_results, step_limit=base_params["env_step_limit"]
-            )
+            best_trained_model = get_best_model(result=train_results)
             model_dir = (
                 Path(__file__).parent.parent
                 / "neural_networks"
@@ -189,7 +173,7 @@ def run_experiments(train: bool = True, eval: bool = True):
 
 if __name__ == "__main__":
     print("Running experiments...")
-    run_experiments(train=True, eval=True)
+    run_experiments(force_train=False, eval=True)
     # try:
     #     run_experiments(train=False, eval=False)
     # except KeyboardInterrupt:

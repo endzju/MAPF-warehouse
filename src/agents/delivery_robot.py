@@ -158,6 +158,8 @@ class DeliveryRobot:
         self.was_blocked = False
         self.pos_history = deque()
         self.next_pos = None
+        self.task_type = None
+        self.goal_pos = None
 
     def __eq__(self, other: "DeliveryRobot"):
         return isinstance(other, DeliveryRobot) and self.id == other.id

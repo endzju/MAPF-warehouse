@@ -20,3 +20,7 @@ then run:
 ```bash
 uv run python -m src.utils.experiment_plotter
 ```
+
+Ideas:
+Train model on larger amount of robots, after training results might be better.
+Fine tuning with another number of robots might be needed.

@@ -54,7 +54,7 @@ def main(
         total_step += 1
         if render:
             env.render()
-            time.sleep(0.4)
+            time.sleep(0.07)
 
     if render:
         time.sleep(1)
@@ -79,10 +79,10 @@ if __name__ == "__main__":
     models_path = Path(__file__).resolve().parent / "neural_networks" / "models"
 
     # CONFIG
-    model_name = "MLP_256_128_b10_r60_v5_u10.pth"
-    model_dir = model_name.split("_b")[0]
+    model_name = "MLP_512_b120_r60_v7_u60.pth"
     model_class = MLP
 
+    model_dir = model_name.split("_b")[0]
     model_path = models_path / model_dir / model_name
     hidden_layers = list(map(int, model_dir.split("_")[1:]))
     view_size = int(model_name.split("_v")[1].split("_")[0])

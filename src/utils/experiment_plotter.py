@@ -18,9 +18,9 @@ if __name__ == "__main__":
         [1024, 512, 256],
     ]
     num_robot_list = [60]
-    batch_sizes = [70]
+    batch_sizes = [10]
     view_sizes = [5]
-    update_episodes_list = [20]
+    update_episodes_list = [10]
 
     x_ticks = [n for n in range(10, 101, 5)]
 

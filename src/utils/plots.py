@@ -3,6 +3,7 @@ from itertools import product
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 from torch import nn
 
 plot_colors = [
@@ -33,7 +34,7 @@ def plot_avg_completed_tasks_percentage(
     window_size: int = 20,
 ):
     filename = filename.removesuffix(".pth")
-    path = path / f"{filename}_completed_tasks_percentage_w{window_size}.png"
+    path = path / f"{filename}_completed_tasks_percentage.png"
     completed_tasks_percentage = [t / max_tasks * 100 for t in avg_completed_tasks]
     plt.figure(figsize=(10, 6))
     x = range(len(avg_completed_tasks))
@@ -60,15 +61,18 @@ def plot_avg_delivery_times(
             "avg_delivery_times and avg_manhattan_times must have the same length"
         )
     filename = filename.removesuffix(".pth")
-    path = path / f"{filename}_avg_delivery_times_w{window_size}.png"
+    path = path / f"{filename}_avg_delivery_times.png"
 
     plt.figure(figsize=(10, 6))
     x = range(len(avg_delivery_times))
     plt.plot(x, avg_delivery_times, label="Delivery time")
     plt.plot(x, avg_manhattan_times, label="Manhattan lower bound")
 
-    min_idx = min(range(len(avg_delivery_times)), key=lambda i: avg_delivery_times[i])
+    ratios = [h / d for d, h in zip(avg_delivery_times, avg_manhattan_times)]
+
+    min_idx = np.argmax(ratios)
     min_value = avg_delivery_times[min_idx]
+    manhattan_value = avg_manhattan_times[min_idx]
     plt.scatter(min_idx, min_value, zorder=5)
     plt.annotate(
         f"{min_value:.2f}",
@@ -76,6 +80,23 @@ def plot_avg_delivery_times(
         textcoords="offset points",
         xytext=(0, 10),
         ha="center",
+    )
+    plt.scatter(min_idx, manhattan_value, zorder=5)
+    plt.annotate(
+        f"{manhattan_value:.2f}",
+        (min_idx, manhattan_value),
+        textcoords="offset points",
+        xytext=(0, -15),
+        ha="center",
+    )
+    plt.annotate(
+        f"{manhattan_value / min_value * 100:.2f}%",
+        (min_idx, min_value),
+        textcoords="offset points",
+        xytext=(0, 35),
+        ha="center",
+        color="red",
+        fontweight="bold",
     )
 
     plt.title(f"Average Delivery Time (Last {window_size} Episodes)")
