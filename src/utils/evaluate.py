@@ -59,7 +59,7 @@ def evaluate(
     manhattan_delivery_times = []
     delivery_times = []
 
-    model = model_class(**model_params).cpu()
+    model = model_class(**model_params, view_size=env_agent_view_size).cpu()
     model.load_state_dict(model_state)
     model.eval()
 
@@ -94,18 +94,24 @@ def run_evaluation(
     model: nn.Module,
     num_robot_list: list[int],
     train_num_robots: int,
-    view_size: int,
     num_batches: int,
     update_episodes: int,
     params: dict,
     num_simulations: int,
     num_processes: int,
 ) -> None:
+
+    data_path = Path(__file__).parent.parent / "data" / "times" / model.display_name
+    filename = f"{model.display_name}_b{num_batches}_r{train_num_robots}_v{model.view_size}_u{update_episodes}.json"
+    full_path = data_path / filename
+    if full_path.exists():
+        return
+
     params = params.copy()
 
     params["model_state"] = model.state_dict()
     params["model_class"] = model.__class__
-    params["env_agent_view_size"] = view_size
+    params["env_agent_view_size"] = model.view_size
     params["env_step_limit"] = 50000
     params["num_simulations"] = num_simulations
     params["model_params"] = {
@@ -136,14 +142,13 @@ def run_evaluation(
             result[idx] = future.result()
 
     result = reversed(result)
-    data_path = Path(__file__).parent.parent / "data" / "times" / model.display_name
+
     data_path.mkdir(parents=True, exist_ok=True)
     data = {
         num_robots: stats
         for num_robots, stats in zip(num_robot_list, result, strict=True)
     }
-    filename = f"{model.display_name}_b{num_batches}_r{train_num_robots}_v{view_size}_u{update_episodes}.json"
-    full_path = data_path / filename
+
     if full_path.exists():
         old_data = json.loads(full_path.read_text(encoding="utf-8"))
         data = {**old_data, **data}

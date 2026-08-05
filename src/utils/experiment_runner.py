@@ -24,11 +24,10 @@ def get_best_model(result: tuple[list[nn.Module], list[float], list[float]]):
 def load_model(
     model: nn.Module,
     num_robots: int,
-    view_size: int,
     num_batches: int,
     update_episodes: int,
 ):
-    filename = f"{model.display_name}_b{num_batches}_r{num_robots}_v{view_size}_u{update_episodes}.pth"
+    filename = f"{model.display_name}_b{num_batches}_r{num_robots}_v{model.view_size}_u{update_episodes}.pth"
     path = (
         Path(__file__).parent.parent
         / "neural_networks"
@@ -56,20 +55,22 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     model_classes = [MLP]
     hidden_layers_list = [
         [256],
-        [512],
-        [1024],
+        # [512],
+        # [1024],
         [128, 64],
-        [256, 128],
-        [512, 256],
-        [1024, 512],
+        # [256, 128],
+        # [512, 256],
+        # [1024, 512],
         [128, 64, 32],
-        [256, 128, 64],
-        [512, 256, 128],
+        # [256, 128, 64],
+        # [512, 256, 128],
         [1024, 512, 256],
+        # [2048],
+        # [4096],
     ]
     train_robot_list = [60]
     train_num_batches_list = [120]
-    train_view_sizes = [5, 7]
+    train_view_sizes = [9]
     train_update_episodes = [60]
 
     eval_robot_list = [n for n in range(10, 101, 5)]
@@ -79,6 +80,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             hidden_layers=h,
             input_size=view_dims * v * v + goal_vec_size,
             output_size=n_actions,
+            view_size=v,
         )
         for m, h, v in product(model_classes, hidden_layers_list, train_view_sizes)
     ]
@@ -86,8 +88,8 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     base_params = {
         "num_episodes": 2000,
         "env_grid_size": (20, 20),
-        "env_step_limit": 800,
-        "env_task_length": 3,
+        "env_step_limit": 300,
+        "env_task_length": 5,
         "device": device,
         "plot": True,
         "epsilon": 1.0,
@@ -100,21 +102,19 @@ def run_experiments(force_train: bool = True, eval: bool = True):
         product(
             models,
             train_robot_list,
-            train_view_sizes,
             train_num_batches_list,
             train_update_episodes,
         )
     )
 
-    for model, num_robots, view_size, num_batches, update_episodes in model_configs:
-        filename = f"{model.display_name}_b{num_batches}_r{num_robots}_v{view_size}_u{update_episodes}.pth"
+    for model, num_robots, num_batches, update_episodes in model_configs:
+        filename = f"{model.display_name}_b{num_batches}_r{num_robots}_v{model.view_size}_u{update_episodes}.pth"
 
         # TRAINING
         if not force_train:
             best_trained_model = load_model(
                 model=model,
                 num_robots=num_robots,
-                view_size=view_size,
                 num_batches=num_batches,
                 update_episodes=update_episodes,
             )
@@ -122,14 +122,13 @@ def run_experiments(force_train: bool = True, eval: bool = True):
         if should_train:
             tic = time.time()
             print(
-                f"Training model: {model.display_name}, num robots: {num_robots}, view size: {view_size}, num batches: {num_batches}, update episodes: {update_episodes}"
+                f"Training model: {model.display_name}, num robots: {num_robots}, view size: {model.view_size}, num batches: {num_batches}, update episodes: {update_episodes}"
             )
             params = base_params.copy()
             params["env_step_limit"] = steps_per_robot * num_robots
             train_results = run_training(
                 model=model,
                 num_robots=num_robots,
-                view_size=view_size,
                 num_batches=num_batches,
                 update_episodes=update_episodes,
                 params=params.copy(),
@@ -160,7 +159,6 @@ def run_experiments(force_train: bool = True, eval: bool = True):
                 model=model,
                 num_robot_list=eval_robot_list,
                 train_num_robots=num_robots,
-                view_size=view_size,
                 num_batches=num_batches,
                 update_episodes=update_episodes,
                 params=base_params.copy(),

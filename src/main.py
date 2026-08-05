@@ -72,14 +72,14 @@ if __name__ == "__main__":
         input_depots=[depot1, depot2],
         output_depots=[depot3, depot4],
         step_limit=5000,
-        task_length=5,
+        task_length=3,
         max_robots=20,
         num_tasks=100,
     )
     models_path = Path(__file__).resolve().parent / "neural_networks" / "models"
 
     # CONFIG
-    model_name = "MLP_512_b120_r60_v7_u60.pth"
+    model_name = "MLP_1024_512_256_b120_r60_v11_u60.pth"
     model_class = MLP
 
     model_dir = model_name.split("_b")[0]
@@ -92,7 +92,10 @@ if __name__ == "__main__":
     n_actions = 5
     input_size = vshape[0] * vshape[1] * vshape[2] + goal_vec_size
     model = model_class(
-        input_size=input_size, hidden_layers=hidden_layers, output_size=n_actions
+        input_size=input_size,
+        hidden_layers=hidden_layers,
+        output_size=n_actions,
+        view_size=view_size,
     ).to("cpu")
     weights_dict = torch.load(model_path, weights_only=True)
     model.load_state_dict(weights_dict)
@@ -102,7 +105,7 @@ if __name__ == "__main__":
         manhattan_delivery_times = []
         delivery_times = []
         env.max_robots = num_robots
-        env.num_tasks = 500 * num_robots
+        env.num_tasks = 5 * num_robots
         avg_manhattan_delivery_time, avg_delivery_time = main(
             model=model,
             env=env,

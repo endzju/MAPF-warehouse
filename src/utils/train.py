@@ -142,6 +142,7 @@ def train(
     epsilon_decay: float,
     epsilon_episodes: int,
     num_batches: int,
+    tick_increase_per_episode: float,
     device: torch.device = torch.device("cpu"),
     plot: bool = True,
     lr=1e-4,
@@ -271,6 +272,7 @@ def train(
 
         # Every {update_episodes} episodes update Target Network and add model to history
         if (episode + 1) % update_episodes == 0:
+            env.step_limit += int(tick_increase_per_episode * update_episodes)
             model_history.append(copy.deepcopy(policy_net).cpu())
             target_net.load_state_dict(policy_net.state_dict())
     print()
@@ -280,13 +282,6 @@ def train(
     window_avg_manhattan_times = get_window_avg(avg_manhattan_times, update_episodes)
 
     if plot:
-        # plot_avg_completed_tasks_percentage(
-        #     avg_completed_tasks=avg_completed_tasks,
-        #     max_tasks=env.num_tasks,
-        #     path=plot_path,
-        #     filename=filename,
-        #     window_size=update_episodes,
-        # )
         plot_avg_delivery_times(
             avg_delivery_times=window_avg_delivery_times,
             avg_manhattan_times=window_avg_manhattan_times,
@@ -306,7 +301,6 @@ def train(
 def run_training(
     model: nn.Module,
     num_robots: int,
-    view_size: int,
     num_batches: int,
     update_episodes: int,
     params: dict,
@@ -324,9 +318,10 @@ def run_training(
     params["model"] = model
     params["env_max_robots"] = num_robots
     params["env_num_tasks"] = num_robots * 5
-    params["env_agent_view_size"] = view_size
+    params["env_agent_view_size"] = model.view_size
     params["num_batches"] = num_batches
     params["update_episodes"] = update_episodes
+    params["tick_increase_per_episode"] = 0.5
 
     return train(**params)
 

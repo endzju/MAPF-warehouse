@@ -3,14 +3,21 @@ from torch import nn
 
 
 class MLP(nn.Module):
-    def __init__(self, hidden_layers: list[int], input_size: int, output_size: int):
-        super(MLP, self).__init__()
+    def __init__(
+        self,
+        hidden_layers: list[int],
+        input_size: int,
+        output_size: int,
+        view_size: int,
+    ):
+        super().__init__()
         self.display_name = (
             f"{self.__class__.__name__}_{'_'.join(map(str, hidden_layers))}"
         )
         self.hidden_layers = hidden_layers
         self.input_size = input_size
         self.output_size = output_size
+        self.view_size = view_size
 
         layers = []
 
