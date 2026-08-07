@@ -29,15 +29,17 @@ class ReplayBuffer:
 
 
 class EfficientReplayBuffer:
-    def __init__(self, capacity, view_shape, goal_shape):
+    def __init__(self, capacity, view_shape, additional_input_shape):
         self.capacity = capacity
         self.ptr = 0
         self.size = 0
 
         self.views = np.zeros((capacity, *view_shape), dtype=np.float32)
         self.next_views = np.zeros((capacity, *view_shape), dtype=np.float32)
-        self.goals = np.zeros((capacity, *goal_shape), dtype=np.float32)
-        self.next_goals = np.zeros((capacity, *goal_shape), dtype=np.float32)
+        self.goals = np.zeros((capacity, *additional_input_shape), dtype=np.float32)
+        self.next_goals = np.zeros(
+            (capacity, *additional_input_shape), dtype=np.float32
+        )
 
         self.actions = np.zeros(capacity, dtype=np.int64)
         self.rewards = np.zeros(capacity, dtype=np.float32)
@@ -47,8 +49,8 @@ class EfficientReplayBuffer:
         idx = self.ptr
         self.views[idx] = state["view"]
         self.next_views[idx] = next_state["view"]
-        self.goals[idx] = state["goal_vector"]
-        self.next_goals[idx] = next_state["goal_vector"]
+        self.goals[idx] = state["additional_input"]
+        self.next_goals[idx] = next_state["additional_input"]
         self.actions[idx] = action
         self.rewards[idx] = reward
         self.dones[idx] = float(done)
@@ -143,7 +145,7 @@ def train(
     epsilon_episodes: int,
     num_batches: int,
     tick_increase_per_episode: float,
-    device: torch.device = torch.device("cpu"),
+    device: torch.device,
     plot: bool = True,
     lr=1e-4,
 ) -> tuple[list[nn.Module], list[float], list[float]]:
@@ -157,6 +159,7 @@ def train(
 
     """
     env = MultiRobotGridEnv(
+        **model.observation_config.to_dict(),
         grid_size=env_grid_size,
         max_robots=env_max_robots,
         agent_view_size=env_agent_view_size,
@@ -165,12 +168,11 @@ def train(
         num_tasks=env_num_tasks,
     )
 
-    view_size = env.agent_view_size
     nn_path = Path(__file__).parent.parent / "neural_networks"
-    plot_path = nn_path / "plots" / f"{model.display_name}"
+    plot_path = nn_path / "plots" / f"{model.model_name}"
     plot_path.mkdir(exist_ok=True, parents=True)
 
-    vshape = (4, view_size, view_size)
+    vshape = (model.view_dims, model.view_size, model.view_size)
 
     policy_net = model.to(device)
     target_net = copy.deepcopy(model).to(device)
@@ -185,7 +187,7 @@ def train(
     memory = EfficientReplayBuffer(
         capacity=500 * batch_size,
         view_shape=vshape,
-        goal_shape=(2,),
+        additional_input_shape=(model.observation_config.get_additional_input_size(),),
     )
 
     gamma = 0.99
@@ -200,7 +202,8 @@ def train(
     avg_delivery_times = [0] * num_episodes
     avg_manhattan_times = [0] * num_episodes
 
-    model_history = []
+    best_model = None
+    best_ratio = -1
 
     tic = time.time()
     for episode in range(num_episodes):
@@ -273,10 +276,20 @@ def train(
         # Every {update_episodes} episodes update Target Network and add model to history
         if (episode + 1) % update_episodes == 0:
             env.step_limit += int(tick_increase_per_episode * update_episodes)
-            model_history.append(copy.deepcopy(policy_net).cpu())
+            avg_delivery_time = sum(
+                avg_delivery_times[episode - update_episodes : episode]
+            )
+            avg_manhattan_distance = sum(
+                avg_manhattan_times[episode - update_episodes : episode]
+            )
+            ratio = avg_manhattan_distance / (avg_delivery_time + 0.01)
+            if ratio > best_ratio:
+                print(" (best)", end="")
+                best_model = copy.deepcopy(policy_net).cpu()
+                best_ratio = ratio
             target_net.load_state_dict(policy_net.state_dict())
     print()
-    filename = f"{model.display_name}_b{num_batches}_r{env_max_robots}_v{env_agent_view_size}_u{update_episodes}"
+
     avg_completed_tasks = get_window_avg(completed_tasks, update_episodes)
     window_avg_delivery_times = get_window_avg(avg_delivery_times, update_episodes)
     window_avg_manhattan_times = get_window_avg(avg_manhattan_times, update_episodes)
@@ -286,12 +299,12 @@ def train(
             avg_delivery_times=window_avg_delivery_times,
             avg_manhattan_times=window_avg_manhattan_times,
             path=plot_path,
-            filename=filename,
+            checkpoint_name=model.checkpoint_name,
             window_size=update_episodes,
         )
 
     return (
-        model_history,
+        best_model,
         avg_completed_tasks,
         window_avg_delivery_times,
         window_avg_manhattan_times,

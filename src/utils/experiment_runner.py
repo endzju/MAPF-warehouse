@@ -7,7 +7,8 @@ import numpy as np
 import torch
 from torch import nn
 
-from src.neural_networks.MLP.mlp import MLP
+from src.neural_networks import observation_configs
+from src.neural_networks.architectures.mlp import MLP
 from src.utils.evaluate import run_evaluation
 from src.utils.train import run_training
 
@@ -15,29 +16,13 @@ from src.utils.train import run_training
 def get_best_model(result: tuple[list[nn.Module], list[float], list[float]]):
     models, avg_completed_tasks, avg_delivery_times, avg_manhattan_times = result
     ratios = [h / d for d, h in zip(avg_delivery_times, avg_manhattan_times)]
-    if len(set(avg_delivery_times)) == 1:
-        return models[int(np.argmax(avg_completed_tasks))]
-    else:
-        return models[int(np.argmax(ratios))]
+    return models[int(np.argmax(ratios))]
 
 
-def load_model(
-    model: nn.Module,
-    num_robots: int,
-    num_batches: int,
-    update_episodes: int,
-):
-    filename = f"{model.display_name}_b{num_batches}_r{num_robots}_v{model.view_size}_u{update_episodes}.pth"
-    path = (
-        Path(__file__).parent.parent
-        / "neural_networks"
-        / "models"
-        / model.display_name
-        / filename
-    )
-    if not path.exists():
+def load_model(model: nn.Module):
+    if not model.save_path.exists():
         return None
-    weights_dict = torch.load(path, weights_only=True)
+    weights_dict = torch.load(model.save_path, weights_only=True)
     model.load_state_dict(weights_dict)
     return model
 
@@ -47,48 +32,74 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    view_dims = 4
-    goal_vec_size = 2
-    n_actions = 5
-
     # CONFIG
-    model_classes = [MLP]
-    hidden_layers_list = [
-        [256],
-        # [512],
-        # [1024],
-        [128, 64],
-        # [256, 128],
-        # [512, 256],
-        # [1024, 512],
-        [128, 64, 32],
-        # [256, 128, 64],
-        # [512, 256, 128],
-        [1024, 512, 256],
-        # [2048],
-        # [4096],
+    models_settings = [
+        {
+            "class": MLP,
+            "view_size": 7,
+            "layers": {
+                "mlp_layers": [1024, 512, 256],
+            },
+            "model_config": "default",
+        },
+        {
+            "class": MLP,
+            "view_size": 7,
+            "layers": {
+                "mlp_layers": [1024, 512, 256],
+            },
+            "model_config": "float_goal_vector",
+        },
+        {
+            "class": MLP,
+            "view_size": 7,
+            "layers": {
+                "mlp_layers": [1024, 512, 256],
+            },
+            "model_config": "modulo2",
+        },
+        {
+            "class": MLP,
+            "view_size": 7,
+            "layers": {
+                "mlp_layers": [1024, 512, 256],
+            },
+            "model_config": "modulo3",
+        },
+        {
+            "class": MLP,
+            "view_size": 7,
+            "layers": {
+                "mlp_layers": [1024, 512, 256],
+            },
+            "model_config": "modulo4",
+        },
     ]
     train_robot_list = [60]
     train_num_batches_list = [120]
-    train_view_sizes = [9]
     train_update_episodes = [60]
 
     eval_robot_list = [n for n in range(10, 101, 5)]
 
-    models = [
-        m(
-            hidden_layers=h,
-            input_size=view_dims * v * v + goal_vec_size,
-            output_size=n_actions,
-            view_size=v,
+    models = []
+
+    for model_setting in models_settings:
+        config = observation_configs.OBSERVATION_CONFIGS[model_setting["model_config"]]
+        model = model_setting["class"](
+            hidden_layers=model_setting["layers"],
+            view_size=model_setting["view_size"],
+            view_dims=config.view_dims,
+            additional_input_size=config.get_additional_input_size(),
+            output_size=config.get_output_size(),
+            observation_config=config,
+            observation_config_name=model_setting["model_config"],
         )
-        for m, h, v in product(model_classes, hidden_layers_list, train_view_sizes)
-    ]
-    steps_per_robot = 20
+        models.append(model)
+
     base_params = {
         "num_episodes": 2000,
         "env_grid_size": (20, 20),
-        "env_step_limit": 300,
+        "env_step_limit": 800,
         "env_task_length": 5,
         "device": device,
         "plot": True,
@@ -108,24 +119,25 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     )
 
     for model, num_robots, num_batches, update_episodes in model_configs:
-        filename = f"{model.display_name}_b{num_batches}_r{num_robots}_v{model.view_size}_u{update_episodes}.pth"
+        model_dir = (
+            Path(__file__).parent.parent
+            / "neural_networks"
+            / "models"
+            / model.model_name
+        )
+        model_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint_name = f"b{num_batches}_r{num_robots}_v{model.view_size}_u{update_episodes}_{model.observation_config_name}.pth"
+        model.save_path = model_dir / checkpoint_name
+        model.checkpoint_name = checkpoint_name
 
         # TRAINING
         if not force_train:
-            best_trained_model = load_model(
-                model=model,
-                num_robots=num_robots,
-                num_batches=num_batches,
-                update_episodes=update_episodes,
-            )
+            best_trained_model = load_model(model=model)
         should_train = force_train or best_trained_model is None
         if should_train:
             tic = time.time()
-            print(
-                f"Training model: {model.display_name}, num robots: {num_robots}, view size: {model.view_size}, num batches: {num_batches}, update episodes: {update_episodes}"
-            )
+            print(f"Training model: {model.model_name}_{model.checkpoint_name}")
             params = base_params.copy()
-            params["env_step_limit"] = steps_per_robot * num_robots
             train_results = run_training(
                 model=model,
                 num_robots=num_robots,
@@ -135,32 +147,20 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             )
             print("model trained")
 
-            best_trained_model = get_best_model(result=train_results)
-            model_dir = (
-                Path(__file__).parent.parent
-                / "neural_networks"
-                / "models"
-                / model.display_name
-            )
-            model_dir.mkdir(parents=True, exist_ok=True)
+            best_trained_model, _, _, _ = train_results
 
-            torch.save(best_trained_model.state_dict(), model_dir / filename)
+            torch.save(best_trained_model.state_dict(), model.save_path)
             elapsed = time.time() - tic
             print(f"Training time: {elapsed / 60:.1f} min")
 
         # EVALUATION
         if eval:
             tic = time.time()
-            model = best_trained_model.cpu()
-            base_params["env_task_length"] = 5
-            print(f"Evaluating model: {filename}")
+            print(f"Evaluating model: {model.model_name}_{model.checkpoint_name}")
 
             run_evaluation(
-                model=model,
+                model=best_trained_model,
                 num_robot_list=eval_robot_list,
-                train_num_robots=num_robots,
-                num_batches=num_batches,
-                update_episodes=update_episodes,
                 params=base_params.copy(),
                 num_simulations=50,
                 num_processes=3,
@@ -171,7 +171,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
 
 if __name__ == "__main__":
     print("Running experiments...")
-    run_experiments(force_train=False, eval=True)
+    run_experiments(force_train=True, eval=True)
     # try:
     #     run_experiments(train=False, eval=False)
     # except KeyboardInterrupt:

@@ -1,28 +1,28 @@
 from itertools import product
 
-from src.neural_networks.MLP.mlp import MLP
+from neural_networks.architectures.mlp import MLP
 from src.utils.plots import plot_delivery_efficiency, plot_delivery_throughput
 
 if __name__ == "__main__":
     model_classes = [MLP]
     hidden_layers_list = [
-        [256],
+        # [256],
         # [512],
         # [1024],
-        [128, 64],
+        # [128, 64],
         # [256, 128],
         # [512, 256],
         # [1024, 512],
-        [128, 64, 32],
+        # [128, 64, 32],
         # [256, 128, 64],
         # [512, 256, 128],
         [1024, 512, 256],
-        # [2048],
-        # [4096],
+        # [2048, 1024, 512],
+        # [1024, 512, 256, 128],
     ]
     num_robot_list = [60]
     batch_sizes = [120]
-    view_sizes = [5, 7, 11]
+    view_sizes = [11]
     update_episodes_list = [60]
 
     x_ticks = [n for n in range(10, 101, 5)]

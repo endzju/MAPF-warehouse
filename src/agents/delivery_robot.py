@@ -60,6 +60,7 @@ class DeliveryRobot:
         # wait if idle
         if self.idle_time > 0:
             self.idle_time = max(0, self.idle_time - 1)
+            self.pos_history.append(self.pos)
             return False
 
         # leave if on depot
@@ -96,27 +97,6 @@ class DeliveryRobot:
         recent_positions = islice(reversed(self.pos_history), stuck_time)
         unique_positions = set(recent_positions)
         return len(unique_positions) <= 2
-
-    def reward(self, next_pos: tuple[int, int], empty_cells: set[tuple[int, int]]):
-        reward = -1
-        if next_pos == self.pos:
-            return reward
-        if next_pos not in empty_cells:
-            return -20
-        if next_pos == self.goal_pos:
-            return 100
-
-        old_dist = self._goal_distance(self.pos)
-        new_dist = self._goal_distance(next_pos)
-        dist_reward = old_dist - new_dist
-
-        if dist_reward < 0:
-            dist_reward *= 5
-        else:
-            dist_reward *= 2.5
-        reward += dist_reward
-
-        return reward
 
     def set_next_pos(self, pos: tuple[int, int]):
         if self.idle_time > 0:

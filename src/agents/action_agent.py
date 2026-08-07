@@ -23,10 +23,12 @@ class ActionAgent:
             return np.random.randint(self.n_actions)
 
         view = torch.FloatTensor(obs["view"]).unsqueeze(0).to(device)
-        goal = torch.FloatTensor(obs["goal_vector"]).unsqueeze(0).to(device)
+        additional_input = (
+            torch.FloatTensor(obs["additional_input"]).unsqueeze(0).to(device)
+        )
 
         with torch.no_grad():
-            q_values = self.model(view, goal)
+            q_values = self.model(view, additional_input)
 
         return torch.argmax(q_values).item()
 
@@ -50,7 +52,8 @@ class ActionAgent:
         )
         goals_tensor = torch.as_tensor(
             np.array(
-                [obs_dict[i]["goal_vector"] for i in network_indices], dtype=np.float32
+                [obs_dict[i]["additional_input"] for i in network_indices],
+                dtype=np.float32,
             ),
             device=device,
         )

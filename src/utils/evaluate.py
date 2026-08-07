@@ -49,6 +49,7 @@ def evaluate(
     Evaluates model, measure delivery time of random order placements.
     """
     env = MultiRobotGridEnv(
+        **model_params["observation_config"].to_dict(),
         grid_size=env_grid_size,
         agent_view_size=env_agent_view_size,
         max_robots=env_max_robots,
@@ -59,7 +60,7 @@ def evaluate(
     manhattan_delivery_times = []
     delivery_times = []
 
-    model = model_class(**model_params, view_size=env_agent_view_size).cpu()
+    model = model_class(**model_params).cpu()
     model.load_state_dict(model_state)
     model.eval()
 
@@ -93,18 +94,15 @@ def run_eval_task(params: dict) -> dict:
 def run_evaluation(
     model: nn.Module,
     num_robot_list: list[int],
-    train_num_robots: int,
-    num_batches: int,
-    update_episodes: int,
     params: dict,
     num_simulations: int,
     num_processes: int,
 ) -> None:
-
-    data_path = Path(__file__).parent.parent / "data" / "times" / model.display_name
-    filename = f"{model.display_name}_b{num_batches}_r{train_num_robots}_v{model.view_size}_u{update_episodes}.json"
-    full_path = data_path / filename
+    model.cpu()
+    data_path = Path(__file__).parent.parent / "data" / "times" / model.model_name
+    full_path = (data_path / model.checkpoint_name).with_suffix(".json")
     if full_path.exists():
+        print("Model is already evaluated.")
         return
 
     params = params.copy()
@@ -114,11 +112,7 @@ def run_evaluation(
     params["env_agent_view_size"] = model.view_size
     params["env_step_limit"] = 50000
     params["num_simulations"] = num_simulations
-    params["model_params"] = {
-        "hidden_layers": model.hidden_layers,
-        "input_size": model.input_size,
-        "output_size": model.output_size,
-    }
+    params["model_params"] = model.get_model_params()
 
     tasks = []
     for num_robots in reversed(num_robot_list):

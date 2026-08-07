@@ -53,15 +53,15 @@ def plot_avg_delivery_times(
     avg_delivery_times: list[int],
     avg_manhattan_times: list[int],
     path: Path,
-    filename: str,
+    checkpoint_name: str,
     window_size: int,
 ):
     if len(avg_delivery_times) != len(avg_manhattan_times):
         raise ValueError(
             "avg_delivery_times and avg_manhattan_times must have the same length"
         )
-    filename = filename.removesuffix(".pth")
-    path = path / f"{filename}_avg_delivery_times.png"
+    checkpoint_name = checkpoint_name.removesuffix(".pth")
+    path = path / f"{checkpoint_name}_avg_delivery_times.png"
 
     plt.figure(figsize=(10, 6))
     x = range(len(avg_delivery_times))
@@ -114,12 +114,9 @@ def read_model_data(
     view_size: int,
     update_episodes: int,
 ) -> dict:
-    data_path = Path(__file__).parent.parent / "data" / "times" / model.display_name
-    filename = (
-        data_path
-        / f"{model.display_name}_b{batch_size}_r{num_robots}_v{view_size}_u{update_episodes}.json"
-    )
-    with open(filename, "r", encoding="utf-8") as f:
+    dir_path = Path(__file__).parent.parent / "data" / "times" / model.model_name
+    data_path = (dir_path / model.checkpoint_name).with_suffix(".json")
+    with open(data_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -140,9 +137,9 @@ def read_models_data(
     ) in list(
         product(models, batch_sizes, num_robot_list, view_sizes, update_episodes_list)
     ):
-        data[
-            f"{model.display_name}_b{batch_size}_r{num_robots}_v{view_size}_u{update_episodes}"
-        ] = read_model_data(model, batch_size, num_robots, view_size, update_episodes)
+        data[f"{model.modelname}_{model.checkpoint_name}"] = read_model_data(
+            model, batch_size, num_robots, view_size, update_episodes
+        )
 
     return data
 

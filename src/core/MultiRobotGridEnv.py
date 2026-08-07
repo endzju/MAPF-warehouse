@@ -26,14 +26,21 @@ class MultiRobotGridEnv(gym.Env):
         grid_size: tuple[int, int] = (20, 20),
         agent_view_size: int = 5,
         obstacles: set[tuple[int, int]] | None = None,
-        input_depots: list[Depot] = [],
-        output_depots: list[Depot] = [],
+        input_depots: list[Depot] | None = None,
+        output_depots: list[Depot] | None = None,
         step_limit: int = 100,
         task_length: int = 5,
         finish_times: dict[TaskType, int] | None = None,
-        tasks: list[Task] = [],
+        tasks: list[Task] | None = None,
         num_tasks: int = 100,
         max_robots: int = 100,
+        modulo_reward_x: tuple[int] = (),
+        modulo_reward_y: tuple[int] = (),
+        modulo_depot_distance_reward_cancel: int = 5,
+        float_goal_vector: bool = False,
+        view_dims: int = 4,
+        goal_vec_size: int = 2,
+        n_actions: int = 5,
     ):
         super().__init__()
         self.grid_width, self.grid_height = grid_size
@@ -49,12 +56,18 @@ class MultiRobotGridEnv(gym.Env):
             TaskType.PICKUP: 1,
             TaskType.LEAVE: 1,
         }
-        self.given_tasks = tasks
+        self.given_tasks = tasks or []
         self.tasks = []
         self.num_tasks = num_tasks
         self.max_robots = max_robots
+        self.modulo_reward_x = modulo_reward_x
+        self.modulo_reward_y = modulo_reward_y
+        self.modulo_depot_distance_reward_cancel = modulo_depot_distance_reward_cancel
+        self.float_goal_vector = float_goal_vector
+        self.view_dims = view_dims
+        self.goal_vec_size = goal_vec_size
+        self.n_actions = n_actions
         self.depot_priority = 0
-        self.float_goal_vec = False
         self.deleted_agents = []
 
         if obstacles:
@@ -68,7 +81,7 @@ class MultiRobotGridEnv(gym.Env):
 
         self.input_depots = input_depots or self._default_input_depots()
         self.output_depots = output_depots or self._default_output_depots()
-        self._update_depot_max_robots()
+        self._reset_depot_max_robots()
         if len(self.input_depots) != len(self.output_depots):
             raise ValueError(
                 "Number of input depots must be equal to number of output depots"
@@ -77,10 +90,10 @@ class MultiRobotGridEnv(gym.Env):
         self.step_count = 0
         self.task_length = task_length
         self.id_counter = 0
+        self.paused = False
 
         # Akcje: 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT, 4=WAIT
-        # MultiDiscrete pozwala zdefiniować akcję dla każdego robota naraz
-        self.action_space = spaces.MultiDiscrete([5] * self.max_robots)
+        self.action_space = spaces.MultiDiscrete([self.n_actions] * self.max_robots)
 
         self.observation_space = spaces.Dict(
             {
@@ -139,15 +152,7 @@ class MultiRobotGridEnv(gym.Env):
         indices = np.argwhere(self.obstacles == 1)
         return set(map(tuple, indices))
 
-    def _increment_depot_priority(self):
-        self.depot_priority = (self.depot_priority + 1) % len(self.input_depots)
-
-    # def _get_priority_depot_indices(self) -> list[Depot]:
-    #     depot_indices = []
-    #     for i in range(len(self.input_depots)):
-    #         depot_indices.append((i + self.depot_priority) % len(self.input_depots))
-
-    def _update_depot_max_robots(self):
+    def _reset_depot_max_robots(self):
         for i in range(len(self.input_depots)):
             self.input_depots[i].stored_robots = self.max_robots // len(
                 self.input_depots
@@ -205,7 +210,7 @@ class MultiRobotGridEnv(gym.Env):
         empty_cells = list(
             self.get_empty_cells(is_depot_obstacle=True, depot_obstacle_radius=2)
         )
-        self._update_depot_max_robots()
+        self._reset_depot_max_robots()
         for depot in self.input_depots:
             depot._clear_tasks()
 
@@ -265,11 +270,52 @@ class MultiRobotGridEnv(gym.Env):
             completed += len(depot.finnished_tasks)
         return completed
 
-    time0 = 0
-    time1 = 0
-    time2 = 0
-    time3 = 0
-    time4 = 0
+    def reward(
+        self,
+        agent: DeliveryRobot,
+        next_pos: tuple[int, int],
+        empty_cells: set[tuple[int, int]],
+    ):
+        reward = -1
+        if next_pos == agent.pos:
+            return reward
+        if next_pos not in empty_cells:
+            return -20
+        if next_pos == agent.goal_pos:
+            return 100
+
+        old_dist = agent._goal_distance(agent.pos)
+        new_dist = agent._goal_distance(next_pos)
+        dist_reward = old_dist - new_dist
+
+        if dist_reward < 0:
+            dist_reward *= 5
+        else:
+            dist_reward *= 2.5
+        reward += dist_reward
+
+        allow_modulo_reward = (
+            abs(agent.pos[0] - agent.goal_pos[0])
+            <= self.modulo_depot_distance_reward_cancel
+            and abs(agent.pos[1] - agent.goal_pos[1])
+            <= self.modulo_depot_distance_reward_cancel
+        )
+
+        if allow_modulo_reward:
+            if self.modulo_reward_x:
+                dx = next_pos[0] - agent.pos[0]
+                reward += (
+                    self.modulo_reward_x[agent.pos[0] % len(self.modulo_reward_x)] * dx
+                )
+            if self.modulo_reward_y:
+                dy = next_pos[1] - agent.pos[1]
+                reward += (
+                    self.modulo_reward_y[agent.pos[1] % len(self.modulo_reward_y)] * dy
+                )
+
+        return reward
+
+    time0, time1, time2, time3, time4 = 0, 0, 0, 0, 0
 
     def step(self, actions: list[int]):
         tic = time.time()
@@ -288,9 +334,9 @@ class MultiRobotGridEnv(gym.Env):
         for agent in agent_list:
             if agent.id in actions:
                 if agent.is_stuck():
+                    rewards[agent.id] = 0
                     random_move = self.np_random.choice(4)
                     next_pos = self._next_pos(agent, random_move)
-                    rewards[agent.id] = 0
                     if next_pos in empty_cells:
                         agent.set_next_pos(next_pos)
                         empty_cells.remove(next_pos)
@@ -298,11 +344,13 @@ class MultiRobotGridEnv(gym.Env):
 
                 next_pos = self._next_pos(agent, actions[agent.id])
                 if next_pos in empty_cells:
-                    rewards[agent.id] = agent.reward(next_pos, empty_cells)
+                    rewards[agent.id] = self.reward(agent, next_pos, empty_cells)
                     agent.set_next_pos(next_pos)
                     empty_cells.remove(next_pos)
                 else:
-                    rewards[agent.id] = agent.reward(next_pos, previous_empty_cells)
+                    rewards[agent.id] = self.reward(
+                        agent, next_pos, previous_empty_cells
+                    )
 
         self.time1 += time.time() - tic
         tic = time.time()
@@ -423,7 +471,7 @@ class MultiRobotGridEnv(gym.Env):
         elif dy > 0:
             dy = 1
 
-        if self.float_goal_vec:
+        if self.float_goal_vector:
             dx = dx / max_dist
             dy = dy / max_dist
 
@@ -441,20 +489,11 @@ class MultiRobotGridEnv(gym.Env):
         agent: DeliveryRobot,
         all_agent_positions: set[tuple[int, int]],
         all_agent_goal_positions: set[tuple[int, int]],
-        is_dummy=False,
     ) -> dict[str, np.ndarray]:
-        view = np.zeros((4, self.agent_view_size, self.agent_view_size), dtype=np.uint8)
+        view = np.zeros(
+            (self.view_dims, self.agent_view_size, self.agent_view_size), dtype=np.uint8
+        )
         radius = self.agent_view_size // 2
-
-        if is_dummy:
-            return {
-                "view": np.zeros(
-                    shape=(4, self.agent_view_size, self.agent_view_size),
-                    dtype=np.uint8,
-                ),
-                "goal_vector": np.zeros(shape=(2,), dtype=np.float32),
-            }
-
         ax, ay = agent.pos
         padded_ax = ax + radius
         padded_ay = ay + radius
@@ -462,6 +501,8 @@ class MultiRobotGridEnv(gym.Env):
             padded_ay - radius : padded_ay + radius + 1,
             padded_ax - radius : padded_ax + radius + 1,
         ]
+
+        view[0] = obstacles
 
         all_agent_positions.remove(agent.pos)
         all_agent_goal_positions.remove(agent.goal_pos)
@@ -477,16 +518,23 @@ class MultiRobotGridEnv(gym.Env):
 
         self._add_if_in_view(agent, agent.goal_pos, view[3])
 
-        goal_vector = self._goal_vector(agent)
+        goal_vector = self._goal_vector(agent=agent)
 
         all_agent_positions.add(agent.pos)
         all_agent_goal_positions.add(agent.goal_pos)
+        modulo_x = np.zeros(len(self.modulo_reward_x), dtype=np.uint8)
+        modulo_y = np.zeros(len(self.modulo_reward_y), dtype=np.uint8)
 
-        view[0] = obstacles
+        if self.modulo_reward_x:
+            modulo_x[ax % len(self.modulo_reward_x)] = 1
+        if self.modulo_reward_y:
+            modulo_y[ay % len(self.modulo_reward_y)] = 1
+
+        additional_input = np.concatenate([goal_vector, modulo_x, modulo_y])
 
         return {
             "view": view,
-            "goal_vector": goal_vector,
+            "additional_input": additional_input,
         }
 
     def _avg_manhattan_time(self) -> float:
@@ -569,7 +617,15 @@ class MultiRobotGridEnv(gym.Env):
 
         return quit_requested, pause_pressed
 
-    def render(self, paused=False):
+    def render_move(self, move_time: float = 1, fps: int = 10):
+        frames = max(1, round(fps * move_time))
+
+        for frame_num in range(1, frames + 1):
+            self.render(animation_progress=frame_num / frames)
+            time.sleep(move_time / frames)
+
+    def render(self, paused: bool = False, animation_progress: float = 1):
+
         if self.window is None:
             pygame.init()
             pygame.display.init()
@@ -588,6 +644,8 @@ class MultiRobotGridEnv(gym.Env):
 
         if self.clock is None:
             self.clock = pygame.time.Clock()
+
+        pygame.event.pump()
 
         current_w, current_h = self.window.get_size()
         canvas = pygame.Surface((current_w, current_h))
@@ -664,8 +722,16 @@ class MultiRobotGridEnv(gym.Env):
 
         # Drawing robots
         for agent in self.agents:
-            pos_x = offset_x + agent.pos[0] * dynamic_cell_size
-            pos_y = offset_y + agent.pos[1] * dynamic_cell_size
+            if len(agent.pos_history) == 0 or agent.pos_history[-1] == agent.pos:
+                moving_pos_x, moving_pos_y = agent.pos[0], agent.pos[1]
+            else:
+                dx = agent.pos[0] - agent.pos_history[-1][0]
+                dy = agent.pos[1] - agent.pos_history[-1][1]
+                moving_pos_x = agent.pos_history[-1][0] + animation_progress * dx
+                moving_pos_y = agent.pos_history[-1][1] + animation_progress * dy
+
+            pos_x = offset_x + round(moving_pos_x * dynamic_cell_size)
+            pos_y = offset_y + round(moving_pos_y * dynamic_cell_size)
 
             robot_rect = pygame.Rect(
                 pos_x,

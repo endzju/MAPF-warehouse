@@ -3,10 +3,10 @@ from pathlib import Path
 
 import torch
 
+from neural_networks.architectures.mlp import MLP
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
 from src.models.depot import Depot
-from src.neural_networks.MLP.mlp import MLP
 
 
 def main(
@@ -21,8 +21,6 @@ def main(
 
     terminated = False
     truncated = False
-    total_step = 0
-    paused = False
 
     while not (terminated or truncated):
         quit_requested, pause_pressed = False, False
@@ -33,9 +31,9 @@ def main(
             break
 
         if pause_pressed:
-            paused = not paused
+            env.paused = not env.paused
 
-        if paused and render:
+        if env.paused and render:
             env.render(paused=True)
             time.sleep(0.1)
             continue
@@ -51,10 +49,9 @@ def main(
 
         observations, rewards, terminated, truncated, info = env.step(actions)
 
-        total_step += 1
         if render:
-            env.render()
-            time.sleep(0.07)
+            env.render_move(move_time=0.3, fps=30)
+            # time.sleep(0.07)
 
     if render:
         time.sleep(1)
@@ -106,6 +103,7 @@ if __name__ == "__main__":
         delivery_times = []
         env.max_robots = num_robots
         env.num_tasks = 5 * num_robots
+        env.task_length = 5
         avg_manhattan_delivery_time, avg_delivery_time = main(
             model=model,
             env=env,
