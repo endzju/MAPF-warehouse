@@ -14,7 +14,7 @@ from src.utils.train import run_training
 
 
 def get_best_model(result: tuple[list[nn.Module], list[float], list[float]]):
-    models, avg_completed_tasks, avg_delivery_times, avg_manhattan_times = result
+    models, _avg_completed_tasks, avg_delivery_times, avg_manhattan_times = result
     ratios = [h / d for d, h in zip(avg_delivery_times, avg_manhattan_times)]
     return models[int(np.argmax(ratios))]
 
@@ -157,7 +157,6 @@ def run_experiments(force_train: bool = True, eval: bool = True):
         if eval:
             tic = time.time()
             print(f"Evaluating model: {model.model_name}_{model.checkpoint_name}")
-
             run_evaluation(
                 model=best_trained_model,
                 num_robot_list=eval_robot_list,

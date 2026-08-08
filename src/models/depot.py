@@ -7,7 +7,7 @@ class Depot:
         # self.stored_agents = []
         # self.task_history = []
         self.tasks = []
-        self.finnished_tasks = []
+        self.finished_tasks = []
         self.stored_robots = 1
 
     def pop_task(self) -> Task:
@@ -21,7 +21,7 @@ class Depot:
 
     def _clear_tasks(self):
         self.tasks = []
-        self.finnished_tasks = []
+        self.finished_tasks = []
 
     def __hash__(self):
         return hash(self.pos)

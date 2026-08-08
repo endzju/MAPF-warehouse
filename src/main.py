@@ -3,10 +3,10 @@ from pathlib import Path
 
 import torch
 
-from neural_networks.architectures.mlp import MLP
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
 from src.models.depot import Depot
+from src.neural_networks.architectures.mlp import MLP
 
 
 def main(
@@ -82,6 +82,7 @@ if __name__ == "__main__":
     model_dir = model_name.split("_b")[0]
     model_path = models_path / model_dir / model_name
     hidden_layers = list(map(int, model_dir.split("_")[1:]))
+    hidden_layers = {"mlp_layers": hidden_layers}
     view_size = int(model_name.split("_v")[1].split("_")[0])
     vshape = (4, view_size, view_size)
     env.agent_view_size = view_size
@@ -93,6 +94,9 @@ if __name__ == "__main__":
         hidden_layers=hidden_layers,
         output_size=n_actions,
         view_size=view_size,
+        view_dims=4,
+        additional_input_size=2,
+        observation_config={},
     ).to("cpu")
     weights_dict = torch.load(model_path, weights_only=True)
     model.load_state_dict(weights_dict)

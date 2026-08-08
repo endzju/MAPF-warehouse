@@ -2,11 +2,13 @@ import ctypes
 import heapq
 import random
 import sys
+import time
 from collections import defaultdict, deque
 from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
+import pygame
 from gymnasium import spaces
 
 from src.agents.delivery_robot import DeliveryRobot
@@ -14,12 +16,6 @@ from src.models.depot import Depot
 from src.models.task import Task
 from src.utils.distance import manhattan_distance
 from src.utils.enums import TaskType
-
-ctypes.windll.shcore.SetProcessDpiAwareness(1)
-
-import time
-
-import pygame
 
 
 class MultiRobotGridEnv(gym.Env):
@@ -73,13 +69,9 @@ class MultiRobotGridEnv(gym.Env):
         self.deleted_agents = []
 
         if obstacles:
-            obs = np.array(list[tuple[int, int]](obstacles), dtype=np.intp)
+            obs = np.array(list(obstacles), dtype=np.intp)
             self.obstacles[obs[:, 0], obs[:, 1]] = 1
-            self.obstacle_set = set[tuple[int, int]](obstacles)
-
-        self.empty_obs = np.zeros(
-            (self.agent_view_size, self.agent_view_size), dtype=np.uint8
-        )
+            self.obstacle_set = {(int(x), int(y)) for x, y in obstacles}
 
         self.modulo_x_size = len(self.modulo_reward_x)
         self.modulo_y_size = len(self.modulo_reward_y)
@@ -100,12 +92,14 @@ class MultiRobotGridEnv(gym.Env):
         self.id_counter = 0
         self.paused = False
 
+        self._calc_grid_caches()
+
         # Akcje: 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT, 4=WAIT
         self.action_space = spaces.MultiDiscrete([self.n_actions] * self.max_robots)
 
         self.observation_space = spaces.Dict(
             {
-                # obstacles, other agent pos, other agnet goal pos, agent goal pos
+                # obstacles, other agent pos, other agent goal pos, agent goal pos
                 "view": spaces.Box(
                     low=0,
                     high=1,
@@ -116,11 +110,11 @@ class MultiRobotGridEnv(gym.Env):
                     ),
                     dtype=np.uint8,
                 ),
-                # difference in x and y coordinates from the goal
+                # goal direction, followed by the one-hot modulo position flags
                 "additional_input": spaces.Box(
                     low=-1.0,
                     high=1.0,
-                    shape=(self.max_robots, 2),
+                    shape=(self.additional_input_size,),
                     dtype=np.float32,
                 ),
             }
@@ -160,7 +154,7 @@ class MultiRobotGridEnv(gym.Env):
 
     def _obstacle_cells(self) -> set[tuple[int, int]]:
         indices = np.argwhere(self.obstacles == 1)
-        return set(map(tuple, indices))
+        return {(int(x), int(y)) for x, y in indices}
 
     def _reset_depot_max_robots(self):
         for i in range(len(self.input_depots)):
@@ -343,17 +337,23 @@ class MultiRobotGridEnv(gym.Env):
     def _is_inside_grid(self, pos: tuple[int, int]) -> bool:
         return 0 <= pos[0] < self.grid_width and 0 <= pos[1] < self.grid_height
 
-    def _step_agents(self, actions, previous_blocked) -> dict[int, float]:
+    def step(self, actions: dict[int, int]):
+        observations = {}
         rewards = {}
 
+        # A cell is walkable when it is inside the grid and not in `blocked`.
+        # `previous_blocked` is the snapshot taken before any agent reserved a cell
+        # this step, so a robot losing a race is not penalised as if it hit a wall.
+
+        previous_blocked = self._obstacle_cells_cache | self.get_agent_positions(
+            include_next_pos=True
+        )
         blocked = set(previous_blocked)
 
         agent_list = list(self.agents)
         random.shuffle(agent_list)
 
         for agent in agent_list:
-            if agent.is_idle():
-                continue
             action = actions.get(agent.id)
             if action is None:
                 raise ValueError("Agent has no action")
@@ -388,9 +388,23 @@ class MultiRobotGridEnv(gym.Env):
         self.agents -= remove_agents
         self.deleted_agents += list(remove_agents)
 
-        return rewards
+        agent_positions = {agent.pos for agent in self.agents}
+        agent_goal_positions = [
+            agent.goal_pos for agent in self.agents if agent.goal_pos is not None
+        ]
+        view_grids = self._build_view_grids(agent_positions, agent_goal_positions)
 
-    def _deploy_robots(self, previous_blocked):
+        for agent in self.agents:
+            if not agent.is_idle():
+                observations[agent.id] = self._get_obs(
+                    agent=agent,
+                    view_grids=view_grids,
+                )
+        truncated = self.step_count >= self.step_limit
+        terminated = self._all_tasks_completed()
+
+        self.step_count += 1
+
         # deploy robot if tasks left
         for in_depot, out_depot in zip(self.input_depots, self.output_depots):
             if (
@@ -414,39 +428,8 @@ class MultiRobotGridEnv(gym.Env):
                         out_depot=out_depot,
                         id=self._next_id(),
                     )
-                agent.idle_time = self.finish_times[TaskType.ENTER]
                 self.agents.add(agent)
                 in_depot.stored_robots -= 1
-
-    def _get_observations(self) -> dict[int, np.ndarray]:
-        observations = {}
-        agent_positions = {agent.pos for agent in self.agents}
-        agent_goal_positions = [
-            agent.goal_pos for agent in self.agents if agent.goal_pos is not None
-        ]
-        view_grids = self._build_view_grids(agent_positions, agent_goal_positions)
-
-        for agent in self.agents:
-            if not agent.is_idle():
-                observations[agent.id] = self._get_obs(
-                    agent=agent,
-                    view_grids=view_grids,
-                )
-
-        return observations
-
-    def step(self, actions: dict[int, int]):
-        previous_blocked = self._obstacle_cells_cache | self.get_agent_positions(
-            include_next_pos=True
-        )
-        rewards = self._step_agents(actions=actions, previous_blocked=previous_blocked)
-        self._deploy_robots(previous_blocked=previous_blocked)
-        observations = self._get_observations()
-
-        self.step_count += 1
-
-        truncated = self.step_count >= self.step_limit
-        terminated = self._all_tasks_completed()
 
         return observations, rewards, terminated, truncated, {}
 
@@ -500,18 +483,19 @@ class MultiRobotGridEnv(gym.Env):
         view = np.zeros(
             (self.view_dims, self.agent_view_size, self.agent_view_size), dtype=np.uint8
         )
-        # chanel 0: obstacle grid
-        # chanel 1: other agents
-        # chanel 2: other agents' goals
-        # chanel 3: own goal
-
         radius = self.view_radius
         window = self.view_window
         ax, ay = agent.pos
         gx, gy = agent.goal_pos
 
+        # The obstacle grid is stored as [x, y] but windowed rows-by-y and
+        # columns-by-x, so channel 0 keeps the same orientation it has always had.
         view[0] = self._padded_obstacle_grid[ax : ax + window, ay : ay + window]
+
         view[1:3] = view_grids[:, ax : ax + window, ay : ay + window]
+
+        # The agent sits at the centre of its own window, so clearing the centre
+        # excludes it from the "other agents" channel.
         view[1, radius, radius] = 0
 
         gdx = gx - ax
@@ -549,19 +533,19 @@ class MultiRobotGridEnv(gym.Env):
             for task in in_depot.tasks:
                 # waiting to enter
                 positions = [in_depot.pos] + task.goal_positions + [out_depot.pos]
-                time = (
+                task_time = (
                     len(task.goal_positions) * self.finish_times[TaskType.PICKUP]
                     + self.finish_times[TaskType.ENTER]
                     + self.finish_times[TaskType.LEAVE]
                 )
                 for i in range(len(positions) - 1):
-                    time += manhattan_distance(positions[i], positions[i + 1])
-                delivery_time += time
+                    task_time += manhattan_distance(positions[i], positions[i + 1])
+                delivery_time += task_time
                 if len(exit_times_heap) == in_depot.stored_robots:
                     time_from_start = max(
                         heapq.heappop(exit_times_heap), time_from_start
                     )
-                exit_time = time_from_start + time
+                exit_time = time_from_start + task_time
                 heapq.heappush(exit_times_heap, exit_time)
                 exit_times.append(exit_time)
                 time_from_start += 1 + self.finish_times[TaskType.ENTER]

@@ -284,7 +284,6 @@ def train(
             )
             ratio = avg_manhattan_distance / (avg_delivery_time + 0.01)
             if ratio > best_ratio:
-                print(" (best)", end="")
                 best_model = copy.deepcopy(policy_net).cpu()
                 best_ratio = ratio
             target_net.load_state_dict(policy_net.state_dict())

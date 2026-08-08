@@ -29,6 +29,7 @@ class DeliveryRobot:
         out_depot: Depot,
         id: int,
         finish_times: dict[TaskType, int] | None = None,
+        idle_time=0,
     ):
         self.pos = position
         self.task = task
@@ -45,7 +46,7 @@ class DeliveryRobot:
         self.goal_pos, self.task_type = None, None
         self.next_pos = None
         self.pos_history = deque()
-        self.idle_time = 0
+        self.idle_time = idle_time
 
     def step(self) -> bool:
         """
@@ -65,7 +66,7 @@ class DeliveryRobot:
 
         # leave if on depot
         if self.task_type == TaskType.LEAVE and self.pos == self.out_depot.pos:
-            self.in_depot.finnished_tasks.append(self.task)
+            self.in_depot.finished_tasks.append(self.task)
             return True
 
         # move
@@ -113,7 +114,11 @@ class DeliveryRobot:
         return occupied_cells
 
     def is_done(self) -> bool:
-        return not self.is_idle() and self.goal_pos is None and self.task.goals == []
+        return (
+            not self.is_idle()
+            and self.goal_pos == self.out_depot.pos
+            and self.task.is_completed()
+        )
 
     def is_idle(self) -> bool:
         return self.idle_time > 0
