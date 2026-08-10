@@ -38,7 +38,7 @@ class MultiRobotGridEnv(gym.Env):
         max_robots: int = 100,
         modulo_reward_x: tuple[int] = (),
         modulo_reward_y: tuple[int] = (),
-        modulo_depot_distance_reward_cancel: int = 5,
+        modulo_goal_distance_reward_cancel: int = 5,
         float_goal_vector: bool = False,
         view_dims: int = 4,
         goal_vec_size: int = 2,
@@ -64,7 +64,7 @@ class MultiRobotGridEnv(gym.Env):
         self.max_robots = max_robots
         self.modulo_reward_x = modulo_reward_x
         self.modulo_reward_y = modulo_reward_y
-        self.modulo_depot_distance_reward_cancel = modulo_depot_distance_reward_cancel
+        self.modulo_goal_distance_reward_cancel = modulo_goal_distance_reward_cancel
         self.float_goal_vector = float_goal_vector
         self.view_dims = view_dims
         self.goal_vec_size = goal_vec_size
@@ -237,7 +237,7 @@ class MultiRobotGridEnv(gym.Env):
         self.agents = set()
         self.available_ids = deque(range(self.max_robots))
         empty_cells = list(
-            self.get_empty_cells(include_depot=False, radius_from_depot=2)
+            self.get_empty_cells(include_depot=False, radius_from_depot=1)
         )
         self._reset_depot_max_robots()
         for depot in self.input_depots:
@@ -326,9 +326,9 @@ class MultiRobotGridEnv(gym.Env):
 
         allow_modulo_reward = (
             abs(agent.pos[0] - agent.goal_pos[0])
-            <= self.modulo_depot_distance_reward_cancel
+            > self.modulo_goal_distance_reward_cancel
             and abs(agent.pos[1] - agent.goal_pos[1])
-            <= self.modulo_depot_distance_reward_cancel
+            > self.modulo_goal_distance_reward_cancel
         )
 
         if allow_modulo_reward:

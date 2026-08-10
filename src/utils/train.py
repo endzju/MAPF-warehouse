@@ -138,7 +138,8 @@ def train(
     env_num_tasks: int,
     model: nn.Module,
     num_episodes: int,
-    update_episodes: int,
+    target_update_interval: int,
+    best_model_window: int,
     epsilon: float,
     epsilon_min: float,
     epsilon_decay: float,
@@ -203,6 +204,7 @@ def train(
     avg_manhattan_times = [0] * num_episodes
 
     best_model = None
+    best_completed_tasks = -1
     best_ratio = -1
 
     tic = time.time()
@@ -273,25 +275,33 @@ def train(
         tic = time.time()
         agent_brain.update_epsilon()
 
-        # Every {update_episodes} episodes update Target Network and add model to history
-        if (episode + 1) % update_episodes == 0:
-            env.step_limit += int(tick_increase_per_episode * update_episodes)
-            avg_delivery_time = sum(
-                avg_delivery_times[episode - update_episodes : episode]
+        # Every {best_model_window} episodes check if trained model is new best model
+        if (episode + 1) % best_model_window == 0:
+            start = episode - best_model_window + 1
+            stop = episode + 1
+            sum_delivery_time = sum(avg_delivery_times[start:stop])
+            sum_manhattan_distance = sum(avg_manhattan_times[start:stop])
+            avg_window_completed_tasks = (
+                sum(completed_tasks[start:stop]) / best_model_window
             )
-            avg_manhattan_distance = sum(
-                avg_manhattan_times[episode - update_episodes : episode]
-            )
-            ratio = avg_manhattan_distance / (avg_delivery_time + 0.01)
-            if ratio > best_ratio:
+            ratio = sum_manhattan_distance / (sum_delivery_time + 0.0001)
+            if (
+                avg_window_completed_tasks > best_completed_tasks
+                or avg_window_completed_tasks == best_completed_tasks
+                and ratio > best_ratio
+            ):
                 best_model = copy.deepcopy(policy_net).cpu()
+                best_completed_tasks = avg_window_completed_tasks
                 best_ratio = ratio
+
+        # Every {target_update_interval} episodes update Target Network and add model to history
+        if (episode + 1) % target_update_interval == 0:
             target_net.load_state_dict(policy_net.state_dict())
     print()
 
-    avg_completed_tasks = get_window_avg(completed_tasks, update_episodes)
-    window_avg_delivery_times = get_window_avg(avg_delivery_times, update_episodes)
-    window_avg_manhattan_times = get_window_avg(avg_manhattan_times, update_episodes)
+    avg_completed_tasks = get_window_avg(completed_tasks, best_model_window)
+    window_avg_delivery_times = get_window_avg(avg_delivery_times, best_model_window)
+    window_avg_manhattan_times = get_window_avg(avg_manhattan_times, best_model_window)
 
     if plot:
         plot_avg_delivery_times(
@@ -299,7 +309,7 @@ def train(
             avg_manhattan_times=window_avg_manhattan_times,
             path=plot_path,
             checkpoint_name=model.checkpoint_name,
-            window_size=update_episodes,
+            window_size=best_model_window,
         )
 
     return (
@@ -314,7 +324,8 @@ def run_training(
     model: nn.Module,
     num_robots: int,
     num_batches: int,
-    update_episodes: int,
+    target_update_interval: int,
+    best_model_window: int,
     params: dict,
 ) -> list[tuple[list[nn.Module], list[int], list[int]]]:
     """
@@ -332,7 +343,8 @@ def run_training(
     params["env_num_tasks"] = num_robots * 5
     params["env_agent_view_size"] = model.view_size
     params["num_batches"] = num_batches
-    params["update_episodes"] = update_episodes
+    params["target_update_interval"] = target_update_interval
+    params["best_model_window"] = best_model_window
     params["tick_increase_per_episode"] = 0.5
 
     return train(**params)

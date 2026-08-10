@@ -1,5 +1,4 @@
 import json
-from itertools import product
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -109,10 +108,6 @@ def plot_avg_delivery_times(
 
 def read_model_data(
     model: nn.Module,
-    batch_size: int,
-    num_robots: int,
-    view_size: int,
-    update_episodes: int,
 ) -> dict:
     dir_path = Path(__file__).parent.parent / "data" / "times" / model.model_name
     data_path = (dir_path / model.checkpoint_name).with_suffix(".json")
@@ -120,46 +115,20 @@ def read_model_data(
         return json.load(f)
 
 
-def read_models_data(
-    models: list[nn.Module],
-    batch_sizes: list[int],
-    num_robot_list: list[int],
-    view_sizes: list[int],
-    update_episodes_list: list[int],
-):
+def read_models_data(models: list[nn.Module]):
     data = {}
-    for (
-        model,
-        batch_size,
-        num_robots,
-        view_size,
-        update_episodes,
-    ) in list(
-        product(models, batch_sizes, num_robot_list, view_sizes, update_episodes_list)
-    ):
-        data[f"{model.modelname}_{model.checkpoint_name}"] = read_model_data(
-            model, batch_size, num_robots, view_size, update_episodes
-        )
+    for model in models:
+        data[f"{model.model_name}_{model.checkpoint_name}"] = read_model_data(model)
 
     return data
 
 
 def plot_delivery_efficiency(
     models: list[nn.Module],
-    batch_sizes: list[int],
-    num_robot_list: list[int],
-    view_sizes: list[int],
-    update_episodes_list: list[int],
     x_ticks: list[int | str],
 ):
     x_ticks_set = {str(tick) for tick in x_ticks}
-    data = read_models_data(
-        models=models,
-        batch_sizes=batch_sizes,
-        num_robot_list=num_robot_list,
-        view_sizes=view_sizes,
-        update_episodes_list=update_episodes_list,
-    )
+    data = read_models_data(models=models)
     plt.figure(figsize=(10, 6))
     for i, (model_name, evaluation) in enumerate(data.items()):
         evaluation = {k: v for k, v in evaluation.items() if k in x_ticks_set}
@@ -197,20 +166,10 @@ def plot_delivery_efficiency(
 
 def plot_delivery_throughput(
     models: list[nn.Module],
-    batch_sizes: list[int],
-    num_robot_list: list[int],
-    view_sizes: list[int],
-    update_episodes_list: list[int],
     x_ticks: list[str | int],
 ):
     x_ticks_set = {str(tick) for tick in x_ticks}
-    data = read_models_data(
-        models,
-        batch_sizes,
-        num_robot_list,
-        view_sizes,
-        update_episodes_list,
-    )
+    data = read_models_data(models)
     plt.figure(figsize=(10, 6))
     for i, (model_name, evaluation) in enumerate(data.items()):
         evaluation = {k: v for k, v in evaluation.items() if k in x_ticks_set}

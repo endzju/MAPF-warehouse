@@ -37,47 +37,56 @@ def run_experiments(force_train: bool = True, eval: bool = True):
         {
             "class": MLP,
             "view_size": 7,
-            "layers": {
-                "mlp_layers": [1024, 512, 256],
+            "hidden_layers": {
+                "mlp_layers": [256, 128],
             },
-            "model_config": "default",
+            "model_config": "modulo2rewardxy",
+        },
+        {
+            "class": MLP,
+            "view_size": 9,
+            "hidden_layers": {
+                "mlp_layers": [256, 128],
+            },
+            "model_config": "modulo2rewardxy",
+        },
+        {
+            "class": MLP,
+            "view_size": 11,
+            "hidden_layers": {
+                "mlp_layers": [256, 128],
+            },
+            "model_config": "modulo2rewardxy",
         },
         {
             "class": MLP,
             "view_size": 7,
-            "layers": {
+            "hidden_layers": {
                 "mlp_layers": [1024, 512, 256],
             },
-            "model_config": "float_goal_vector",
+            "model_config": "modulo2rewardxy",
         },
         {
             "class": MLP,
-            "view_size": 7,
-            "layers": {
+            "view_size": 9,
+            "hidden_layers": {
                 "mlp_layers": [1024, 512, 256],
             },
-            "model_config": "modulo2",
+            "model_config": "modulo2rewardxy",
         },
         {
             "class": MLP,
-            "view_size": 7,
-            "layers": {
+            "view_size": 11,
+            "hidden_layers": {
                 "mlp_layers": [1024, 512, 256],
             },
-            "model_config": "modulo3",
-        },
-        {
-            "class": MLP,
-            "view_size": 7,
-            "layers": {
-                "mlp_layers": [1024, 512, 256],
-            },
-            "model_config": "modulo4",
+            "model_config": "modulo2rewardxy",
         },
     ]
     train_robot_list = [60]
     train_num_batches_list = [120]
-    train_update_episodes = [60]
+    train_target_update_interval = [60]
+    train_best_model_window = 10
 
     eval_robot_list = [n for n in range(10, 101, 5)]
 
@@ -86,7 +95,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     for model_setting in models_settings:
         config = observation_configs.OBSERVATION_CONFIGS[model_setting["model_config"]]
         model = model_setting["class"](
-            hidden_layers=model_setting["layers"],
+            hidden_layers=model_setting["hidden_layers"],
             view_size=model_setting["view_size"],
             view_dims=config.view_dims,
             additional_input_size=config.get_additional_input_size(),
@@ -97,9 +106,9 @@ def run_experiments(force_train: bool = True, eval: bool = True):
         models.append(model)
 
     base_params = {
-        "num_episodes": 2000,
+        "num_episodes": 1000,
         "env_grid_size": (20, 20),
-        "env_step_limit": 800,
+        "env_step_limit": 1500,
         "env_task_length": 5,
         "device": device,
         "plot": True,
@@ -114,11 +123,11 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             models,
             train_robot_list,
             train_num_batches_list,
-            train_update_episodes,
+            train_target_update_interval,
         )
     )
 
-    for model, num_robots, num_batches, update_episodes in model_configs:
+    for model, num_robots, num_batches, target_update_interval in model_configs:
         model_dir = (
             Path(__file__).parent.parent
             / "neural_networks"
@@ -126,7 +135,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             / model.model_name
         )
         model_dir.mkdir(parents=True, exist_ok=True)
-        checkpoint_name = f"b{num_batches}_r{num_robots}_v{model.view_size}_u{update_episodes}_{model.observation_config_name}.pth"
+        checkpoint_name = f"b{num_batches}_r{num_robots}_v{model.view_size}_u{target_update_interval}_{model.observation_config_name}.pth"
         model.save_path = model_dir / checkpoint_name
         model.checkpoint_name = checkpoint_name
 
@@ -142,7 +151,8 @@ def run_experiments(force_train: bool = True, eval: bool = True):
                 model=model,
                 num_robots=num_robots,
                 num_batches=num_batches,
-                update_episodes=update_episodes,
+                target_update_interval=target_update_interval,
+                best_model_window=train_best_model_window,
                 params=params.copy(),
             )
             print("model trained")
@@ -170,7 +180,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
 
 if __name__ == "__main__":
     print("Running experiments...")
-    run_experiments(force_train=True, eval=True)
+    run_experiments(force_train=False, eval=True)
     # try:
     #     run_experiments(train=False, eval=False)
     # except KeyboardInterrupt:
