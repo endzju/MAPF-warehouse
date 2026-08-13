@@ -61,7 +61,7 @@ if __name__ == "__main__":
     models_path = Path(__file__).resolve().parent / "neural_networks" / "models"
 
     # CONFIG
-    model_dir = "MLP_256_128"
+    model_dir = "MLP_512"
     model_filename = "b120_r60_v7_u60_modulo2rewardxy.pth"
     model_class = MLP
 

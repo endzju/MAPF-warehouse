@@ -10,10 +10,17 @@ class ObservationConfig:
     view_dims: int = 4
     goal_vec_size: int = 2
     n_actions: int = 5
+    x_position_float: bool = False
+    y_position_float: bool = False
+    task_tsp = False
 
     def get_additional_input_size(self) -> int:
         return (
-            self.goal_vec_size + len(self.modulo_reward_x) + len(self.modulo_reward_y)
+            self.goal_vec_size
+            + len(self.modulo_reward_x)
+            + len(self.modulo_reward_y)
+            + int(self.x_position_float)
+            + int(self.y_position_float)
         )
 
     def get_output_size(self) -> int:
@@ -28,6 +35,9 @@ class ObservationConfig:
             "view_dims": self.view_dims,
             "goal_vec_size": self.goal_vec_size,
             "n_actions": self.n_actions,
+            "x_position_float": self.x_position_float,
+            "y_position_float": self.y_position_float,
+            "task_tsp": self.task_tsp,
         }
 
 
@@ -53,6 +63,52 @@ MODULO2REWARDY = ObservationConfig(
 MODULO2REWARDXY = ObservationConfig(
     modulo_reward_x=(1, -1),
     modulo_reward_y=(1, -1),
+)
+MODULO2REWARDXYFLOATPOSXY = ObservationConfig(
+    modulo_reward_x=(1, -1),
+    modulo_reward_y=(1, -1),
+    x_position_float=True,
+    y_position_float=True,
+)
+MODULO2REWARDXYFLOATPOSX = ObservationConfig(
+    modulo_reward_x=(1, -1),
+    modulo_reward_y=(1, -1),
+    x_position_float=True,
+)
+MODULO2REWARDXYFLOATPOSY = ObservationConfig(
+    modulo_reward_x=(1, -1),
+    modulo_reward_y=(1, -1),
+    y_position_float=True,
+)
+MODULO2REWARDXYDIS6 = ObservationConfig(
+    modulo_reward_x=(1, -1),
+    modulo_reward_y=(1, -1),
+    modulo_goal_distance_reward_cancel=4,
+)
+MODULO2REWARDXYDIS4 = ObservationConfig(
+    modulo_reward_x=(1, -1),
+    modulo_reward_y=(1, -1),
+    modulo_goal_distance_reward_cancel=4,
+)
+MODULO2REWARDXYDIS3 = ObservationConfig(
+    modulo_reward_x=(1, -1),
+    modulo_reward_y=(1, -1),
+    modulo_goal_distance_reward_cancel=3,
+)
+MODULO2REWARDXYDIS2 = ObservationConfig(
+    modulo_reward_x=(1, -1),
+    modulo_reward_y=(1, -1),
+    modulo_goal_distance_reward_cancel=2,
+)
+MODULO2REWARDXYDIS1 = ObservationConfig(
+    modulo_reward_x=(1, -1),
+    modulo_reward_y=(1, -1),
+    modulo_goal_distance_reward_cancel=1,
+)
+MODULO2REWARDXYDIS0 = ObservationConfig(
+    modulo_reward_x=(1, -1),
+    modulo_reward_y=(1, -1),
+    modulo_goal_distance_reward_cancel=0,
 )
 
 MODULO3 = ObservationConfig(
@@ -93,8 +149,17 @@ OBSERVATION_CONFIGS = {
     "modulo2rewardx": MODULO2REWARDX,
     "modulo2rewardy": MODULO2REWARDY,
     "modulo2rewardxy": MODULO2REWARDXY,
+    "modulo2rewardxydis6": MODULO2REWARDXYDIS6,
+    "modulo2rewardxydis4": MODULO2REWARDXYDIS4,
+    "modulo2rewardxydis3": MODULO2REWARDXYDIS3,
+    "modulo2rewardxydis2": MODULO2REWARDXYDIS2,
+    "modulo2rewardxydis1": MODULO2REWARDXYDIS1,
+    "modulo2rewardxydis0": MODULO2REWARDXYDIS0,
     "intgoalvector": INTGOALVECTOR,
     "modulo4singlelane1": MODULO4SINGLELANE1,
     "modulo4singlelane2": MODULO4SINGLELANE2,
     "modulo4doublelane": MODULO4DOUBLELANE,
+    "modulo2rewardxyfloatposxy": MODULO2REWARDXYFLOATPOSXY,
+    "modulo2rewardxyfloatposx": MODULO2REWARDXYFLOATPOSX,
+    "modulo2rewardxyfloatposy": MODULO2REWARDXYFLOATPOSY,
 }

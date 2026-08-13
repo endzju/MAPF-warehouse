@@ -12,6 +12,7 @@ from gymnasium import spaces
 from src.agents.delivery_robot import DeliveryRobot
 from src.models.depot import Depot
 from src.models.task import Task
+from src.models.tsp_solver import pyvrp_solver
 from src.utils.distance import manhattan_distance
 from src.utils.enums import TaskType
 
@@ -43,6 +44,9 @@ class MultiRobotGridEnv(gym.Env):
         view_dims: int = 4,
         goal_vec_size: int = 2,
         n_actions: int = 5,
+        x_position_float: bool = False,
+        y_position_float: bool = False,
+        task_tsp: bool = False,
     ):
         super().__init__()
         self.grid_width, self.grid_height = grid_size
@@ -69,6 +73,9 @@ class MultiRobotGridEnv(gym.Env):
         self.view_dims = view_dims
         self.goal_vec_size = goal_vec_size
         self.n_actions = n_actions
+        self.x_position_float = x_position_float
+        self.y_position_float = y_position_float
+        self.task_tsp = task_tsp
         self.depot_priority = 0
         self.deleted_agents = []
 
@@ -84,7 +91,11 @@ class MultiRobotGridEnv(gym.Env):
         self.modulo_x_size = len(self.modulo_reward_x)
         self.modulo_y_size = len(self.modulo_reward_y)
         self.additional_input_size = (
-            self.goal_vec_size + self.modulo_x_size + self.modulo_y_size
+            self.goal_vec_size
+            + self.modulo_x_size
+            + self.modulo_y_size
+            + int(self.x_position_float)
+            + int(self.y_position_float)
         )
 
         self.input_depots = input_depots or self._default_input_depots()
@@ -242,6 +253,8 @@ class MultiRobotGridEnv(gym.Env):
         self._reset_depot_max_robots()
         for depot in self.input_depots:
             depot._clear_tasks()
+        if self.task_tsp:
+            solver = pyvrp_solver()
 
         if self.given_tasks:
             self.tasks = self.given_tasks
@@ -251,6 +264,7 @@ class MultiRobotGridEnv(gym.Env):
             )
             for i in range(self.num_tasks):
                 goal_positions = [empty_cells[j] for j in goal_indices[i]]
+
                 goal_types = [TaskType.PICKUP] * len(goal_positions)
                 task = Task(goal_positions=goal_positions, goal_types=goal_types, id=i)
                 self.tasks.append(task)
@@ -258,6 +272,8 @@ class MultiRobotGridEnv(gym.Env):
         for idx, task in enumerate(self.tasks):
             task.reset()
             depot = self.input_depots[idx % len(self.input_depots)]
+            if self.task_tsp:
+                goal_positions = solver.solve([depot.pos] + task.goal_positions)
             depot.add_task(task)
 
         observations = {}
@@ -524,13 +540,23 @@ class MultiRobotGridEnv(gym.Env):
         additional_input = np.zeros(self.additional_input_size, dtype=np.float32)
         goal_vec_size = self.goal_vec_size
         additional_input[:goal_vec_size] = self._goal_vector(agent=agent)
+        cur_additional_input_size = goal_vec_size
 
         modulo_x_size = self.modulo_x_size
         modulo_y_size = self.modulo_y_size
         if modulo_x_size:
-            additional_input[goal_vec_size + ax % modulo_x_size] = 1
+            additional_input[cur_additional_input_size + ax % modulo_x_size] = 1
+            cur_additional_input_size += modulo_x_size
         if modulo_y_size:
-            additional_input[goal_vec_size + modulo_x_size + ay % modulo_y_size] = 1
+            additional_input[cur_additional_input_size + ay % modulo_y_size] = 1
+            cur_additional_input_size += modulo_y_size
+
+        if self.x_position_float:
+            additional_input[cur_additional_input_size] = ax / self.grid_width
+            cur_additional_input_size += 1
+        if self.y_position_float:
+            additional_input[cur_additional_input_size] = ay / self.grid_height
+            cur_additional_input_size += 1
 
         return {
             "view": view,

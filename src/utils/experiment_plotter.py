@@ -4,72 +4,39 @@ from src.neural_networks.architectures.mlp import MLP
 from src.utils.plots import plot_delivery_efficiency, plot_delivery_throughput
 
 if __name__ == "__main__":
-    models_settings = [
-        {
-            "class": MLP,
-            "view_size": 7,
-            "hidden_layers": {
-                "mlp_layers": [256, 128],
-            },
-            "model_config": "default",
-        },
-        {
-            "class": MLP,
-            "view_size": 7,
-            "hidden_layers": {
-                "mlp_layers": [256, 128],
-            },
-            "model_config": "intgoalvector",
-        },
-        {
-            "class": MLP,
-            "view_size": 7,
-            "hidden_layers": {
-                "mlp_layers": [256, 128],
-            },
-            "model_config": "modulo2rewardxy",
-        },
-        {
-            "class": MLP,
-            "view_size": 7,
-            "hidden_layers": {
-                "mlp_layers": [256, 128],
-            },
-            "model_config": "modulo3",
-        },
-        {
-            "class": MLP,
-            "view_size": 7,
-            "hidden_layers": {
-                "mlp_layers": [256, 128],
-            },
-            "model_config": "modulo4",
-        },
-        {
-            "class": MLP,
-            "view_size": 7,
-            "hidden_layers": {
-                "mlp_layers": [256, 128],
-            },
-            "model_config": "modulo4singlelane1",
-        },
-        {
-            "class": MLP,
-            "view_size": 7,
-            "hidden_layers": {
-                "mlp_layers": [256, 128],
-            },
-            "model_config": "modulo4singlelane2",
-        },
-        {
-            "class": MLP,
-            "view_size": 7,
-            "hidden_layers": {
-                "mlp_layers": [256, 128],
-            },
-            "model_config": "modulo4doublelane",
-        },
+    hidden_layers = [
+        [128],
+        [256],
+        [512],
+        [16, 8],
+        [32, 16],
+        [64, 32],
+        [128, 64],
+        [256, 128],
+        [512, 256],
+        [1024, 512],
+        [64, 32, 16],
+        [128, 64, 32],
+        [256, 128, 64],
+        [512, 256, 128],
+        [1024, 512, 256],
+        [128, 64, 32, 16],
+        [256, 128, 64, 32],
+        [512, 256, 128, 64],
+        [1024, 512, 256, 128],
     ]
+    models_settings = []
+    for h in hidden_layers:
+        models_settings.append(
+            {
+                "class": MLP,
+                "view_size": 7,
+                "hidden_layers": {
+                    "mlp_layers": h,
+                },
+                "model_config": "modulo2rewardxy",
+            }
+        )
     train_robot_list = [60]
     train_num_batches_list = [120]
     train_target_update_interval = [60]

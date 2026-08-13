@@ -33,56 +33,59 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     print(f"Device: {device}")
 
     # CONFIG
+
+    hidden_layers = [
+        [256],
+        [512],
+        [1024],
+        [32, 16],
+        [64, 32],
+        [128, 64],
+        [256, 128],
+        [512, 256],
+        [1024, 512],
+    ]
+    view_sizes = [7, 9, 11, 13]
+
     models_settings = [
         {
             "class": MLP,
             "view_size": 7,
             "hidden_layers": {
-                "mlp_layers": [256, 128],
+                "mlp_layers": [512],
             },
-            "model_config": "modulo2rewardxy",
-        },
-        {
-            "class": MLP,
-            "view_size": 9,
-            "hidden_layers": {
-                "mlp_layers": [256, 128],
-            },
-            "model_config": "modulo2rewardxy",
-        },
-        {
-            "class": MLP,
-            "view_size": 11,
-            "hidden_layers": {
-                "mlp_layers": [256, 128],
-            },
-            "model_config": "modulo2rewardxy",
+            "model_config": "modulo2rewardxyfloatposxy",
         },
         {
             "class": MLP,
             "view_size": 7,
             "hidden_layers": {
-                "mlp_layers": [1024, 512, 256],
+                "mlp_layers": [512],
             },
-            "model_config": "modulo2rewardxy",
+            "model_config": "modulo2rewardxyfloatposx",
         },
         {
             "class": MLP,
-            "view_size": 9,
+            "view_size": 7,
             "hidden_layers": {
-                "mlp_layers": [1024, 512, 256],
+                "mlp_layers": [512],
             },
-            "model_config": "modulo2rewardxy",
-        },
-        {
-            "class": MLP,
-            "view_size": 11,
-            "hidden_layers": {
-                "mlp_layers": [1024, 512, 256],
-            },
-            "model_config": "modulo2rewardxy",
+            "model_config": "modulo2rewardxyfloatposy",
         },
     ]
+
+    for v, h in product(view_sizes, hidden_layers):
+        models_settings.append(
+            {
+                "class": MLP,
+                "view_size": v,
+                "hidden_layers": {
+                    "mlp_layers": h,
+                },
+                "model_config": "modulo2rewardxy",
+            }
+        )
+
     train_robot_list = [60]
     train_num_batches_list = [120]
     train_target_update_interval = [60]

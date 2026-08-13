@@ -189,11 +189,31 @@ def plot_delivery_throughput(
             marker="o",
         )
 
+    max_y = max(
+        eval_info["robot_throughput_per_100ticks"]
+        for evaluation in data.values()
+        for eval_info in evaluation.values()
+    )
+
+    plt.axhline(y=max_y, linestyle="--")
+
+    plt.text(
+        x=0.99,
+        y=max_y,
+        s=f"Max = {max_y:.2f}",
+        transform=plt.gca().get_yaxis_transform(),
+        ha="right",
+        va="bottom",
+    )
+
     plt.xlabel("Number of Robots")
     plt.ylabel("Avg Robot throughput per 100 ticks")
     plt.title("Average Robot Throughput")
     plt.grid(True)
-    plt.legend()
+    plt.legend(
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1),
+    )
     plt.tight_layout()
     results_path = (
         Path(__file__).parent.parent / "neural_networks" / "plots" / "results"
