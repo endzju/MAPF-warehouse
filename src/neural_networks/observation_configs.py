@@ -162,4 +162,10 @@ OBSERVATION_CONFIGS = {
     "modulo2rewardxyfloatposxy": MODULO2REWARDXYFLOATPOSXY,
     "modulo2rewardxyfloatposx": MODULO2REWARDXYFLOATPOSX,
     "modulo2rewardxyfloatposy": MODULO2REWARDXYFLOATPOSY,
+    "4096-1": DEFAULT,
+    "4096-2": DEFAULT,
+    "4096-4": DEFAULT,
+    "4096-8": DEFAULT,
+    "4096-16": DEFAULT,
+    "4096-32": DEFAULT,
 }

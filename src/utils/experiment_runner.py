@@ -86,8 +86,23 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             }
         )
 
+    models_settings = [
+        {
+            "class": MLP,
+            "view_size": 7,
+            "hidden_layers": {
+                "mlp_layers": [512],
+            },
+            "model_config": "4096-4",
+        },
+    ]
+    # 4096 * 32 best num batches ~ 17, best result -> 72%, chyba tez niestabilne
+    # 4096 * 16 best num batches ~ 30, best result -> 72%, a bit unstable
+    # 4096 * 8  best num batches ~ 50 - 60, best result -> 72% very unstable
+    # note for future me:
+
     train_robot_list = [60]
-    train_num_batches_list = [120]
+    train_num_batches_list = [80, 85, 90, 95, 100, 105, 110]
     train_target_update_interval = [60]
     train_best_model_window = 10
 
@@ -183,7 +198,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
 
 if __name__ == "__main__":
     print("Running experiments...")
-    run_experiments(force_train=False, eval=True)
+    run_experiments(force_train=False, eval=False)
     # try:
     #     run_experiments(train=False, eval=False)
     # except KeyboardInterrupt:

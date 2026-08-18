@@ -183,10 +183,10 @@ def train(
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=lr)
     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
 
-    batch_size = 4096 * 2
+    batch_size = 4096 * 4
 
     memory = EfficientReplayBuffer(
-        capacity=500 * batch_size,
+        capacity=500 * 4096 * 2,
         view_shape=vshape,
         additional_input_shape=(model.observation_config.get_additional_input_size(),),
     )
@@ -214,7 +214,7 @@ def train(
         obs, _ = env.reset()
         done = False
 
-        print(f"--- Episode: {episode}, epsilon: {agent_brain.epsilon:.5f} ", end="")
+        print(f"-Episode: {episode}, epsilon: {agent_brain.epsilon:.5f}", end="")
         simulation_tic = time.time()
         action_time = 0
         env_step_time = 0
@@ -231,7 +231,7 @@ def train(
             if done:
                 message = "TIMEOUT" if truncated else "SUCCESS"
                 print(
-                    f"{message}, tasks completed: {env.get_num_tasks_completed()}/{len(env.tasks)}",
+                    f", tasks completed: {env.get_num_tasks_completed()}/{len(env.tasks)}",
                     end="",
                 )
                 tasks_completed = env.get_num_tasks_completed()
@@ -255,23 +255,22 @@ def train(
             memory_push_time += time.time() - memory_push_tic
             obs = next_obs
 
-        print(f", simulation: {time.time() - simulation_tic:.2f}s ", end="")
+        print(f", simulation: {time.time() - simulation_tic:.2f}s", end="")
         # print(f"(action: {action_time:.2f}s", end="")
         # print(f", env step: {env_step_time:.2f}s", end="")
         # print(f", memory push: {memory_push_time:.2f}s)", end="")
-        train_count = min(len(memory) // batch_size, num_batches)
         optimize_tic = time.time()
         sample_time = 0
         policy_net.to(device)
-        for _ in range(train_count):
+        for _ in range(num_batches):
             sample_tic = time.time()
             batch = memory.sample(batch_size)
             sample_time += time.time() - sample_tic
             optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler)
         # print(f"train_count: {train_count}, memory len {len(memory)}", end="")
-        print(f", optimize: {time.time() - optimize_tic:.2f}s ", end="")
+        print(f", optimize: {time.time() - optimize_tic:.2f}s", end="")
         # print(f"(memory sample: {sample_time:.2f}s)", end="")
-        print(f", episode time: {time.time() - tic:.2f}s ---", end="\r")
+        print(f", episode time: {time.time() - tic:.2f}s-", end="\r")
         tic = time.time()
         agent_brain.update_epsilon()
 
