@@ -109,7 +109,7 @@ def plot_avg_delivery_times(
 def read_model_data(
     model: nn.Module,
 ) -> dict:
-    dir_path = Path(__file__).parent.parent / "data" / "times" / model.model_name
+    dir_path = Path(__file__).parent.parent / "data" / "eval" / model.model_name
     data_path = (dir_path / model.checkpoint_name).with_suffix(".json")
     with open(data_path, "r", encoding="utf-8") as f:
         return json.load(f)

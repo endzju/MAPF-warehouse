@@ -7,7 +7,6 @@ from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
 from src.models.depot import Depot
 from src.neural_networks.architectures.mlp import MLP
-from src.neural_networks.observation_configs import OBSERVATION_CONFIGS
 
 
 def get_hidden_layers(model_name):
@@ -69,7 +68,6 @@ if __name__ == "__main__":
 
     config_name = model_filename.split("_")[-1].split(".")[0]
     config_name = "modulo2"
-    config = OBSERVATION_CONFIGS[config_name]
     hidden_layers = get_hidden_layers(model_dir)
 
     view_size = int(model_filename.split("v")[1].split("_")[0])
@@ -106,7 +104,6 @@ if __name__ == "__main__":
         task_length=5,
         max_robots=60,
         num_tasks=300,
-        **config.to_dict(),
     )
     # try:
     avg_manhattan_delivery_time, avg_delivery_time = main(

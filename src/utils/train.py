@@ -2,15 +2,18 @@ import copy
 import random
 import time
 from collections import deque
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+from tqdm import tqdm
 
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
+from src.neural_networks.model_config import ModelConfig
 from src.utils.plots import plot_avg_delivery_times
 
 
@@ -130,23 +133,24 @@ def optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler):
 
 
 def train(
-    env_grid_size: tuple[int, int],
-    env_max_robots: int,
-    env_agent_view_size: int,
-    env_step_limit: int,
-    env_task_length: int,
-    env_num_tasks: int,
-    model: nn.Module,
+    model_config: ModelConfig,
+    env: MultiRobotGridEnv,
+    # Train params:
     num_episodes: int,
-    target_update_interval: int,
-    best_model_window: int,
+    device: torch.device,
     epsilon: float,
     epsilon_min: float,
     epsilon_decay: float,
     epsilon_episodes: int,
+    best_model_window: int,
+    # Config params:
+    batch_size: int,
     num_batches: int,
-    tick_increase_per_episode: float,
-    device: torch.device,
+    buffer_length: int,
+    target_update_interval: int,
+    gamma: float,
+    # Other params:
+    verbose: int = 0,
     plot: bool = True,
     lr=1e-4,
 ) -> tuple[list[nn.Module], list[float], list[float]]:
@@ -159,22 +163,12 @@ def train(
         list[float]: List of steps per episode.
 
     """
-    env = MultiRobotGridEnv(
-        **model.observation_config.to_dict(),
-        grid_size=env_grid_size,
-        max_robots=env_max_robots,
-        agent_view_size=env_agent_view_size,
-        step_limit=env_step_limit,
-        task_length=env_task_length,
-        num_tasks=env_num_tasks,
-    )
 
     nn_path = Path(__file__).parent.parent / "neural_networks"
-    plot_path = nn_path / "plots" / f"{model.model_name}"
+    plot_path = nn_path / "plots" / model_config.get_model_dir_name()
     plot_path.mkdir(exist_ok=True, parents=True)
 
-    vshape = (model.view_dims, model.view_size, model.view_size)
-
+    model = model_config.build_model()
     policy_net = model.to(device)
     target_net = copy.deepcopy(model).to(device)
     policy_net.train()
@@ -183,15 +177,12 @@ def train(
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=lr)
     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
 
-    batch_size = 4096 * 4
-
     memory = EfficientReplayBuffer(
-        capacity=500 * 4096 * 2,
-        view_shape=vshape,
-        additional_input_shape=(model.observation_config.get_additional_input_size(),),
+        capacity=buffer_length,
+        view_shape=model_config.get_view_input_shape(),
+        additional_input_shape=(model_config.get_additional_input_size(),),
     )
 
-    gamma = 0.99
     agent_brain = ActionAgent(
         model=policy_net,
         epsilon=epsilon,
@@ -213,8 +204,8 @@ def train(
             agent_brain.epsilon = 0
         obs, _ = env.reset()
         done = False
-
-        print(f"-Episode: {episode}, epsilon: {agent_brain.epsilon:.5f}", end="")
+        if verbose > 0:
+            print(f"-Episode: {episode}, epsilon: {agent_brain.epsilon:.5f}", end="")
         simulation_tic = time.time()
         action_time = 0
         env_step_time = 0
@@ -229,11 +220,11 @@ def train(
             env_step_time += time.time() - step_tic
             done = terminated or truncated
             if done:
-                message = "TIMEOUT" if truncated else "SUCCESS"
-                print(
-                    f", tasks completed: {env.get_num_tasks_completed()}/{len(env.tasks)}",
-                    end="",
-                )
+                if verbose > 0:
+                    print(
+                        f", tasks completed: {env.get_num_tasks_completed()}/{len(env.tasks)}",
+                        end="",
+                    )
                 tasks_completed = env.get_num_tasks_completed()
                 completed_tasks[episode] = tasks_completed
                 avg_delivery_times[episode] = (
@@ -254,11 +245,12 @@ def train(
                     )
             memory_push_time += time.time() - memory_push_tic
             obs = next_obs
-
-        print(f", simulation: {time.time() - simulation_tic:.2f}s", end="")
-        # print(f"(action: {action_time:.2f}s", end="")
-        # print(f", env step: {env_step_time:.2f}s", end="")
-        # print(f", memory push: {memory_push_time:.2f}s)", end="")
+        if verbose > 0:
+            print(f", simulation: {time.time() - simulation_tic:.2f}s", end="")
+        if verbose > 1:
+            print(f"(action: {action_time:.2f}s", end="")
+            print(f", env step: {env_step_time:.2f}s", end="")
+            print(f", memory push: {memory_push_time:.2f}s)", end="")
         optimize_tic = time.time()
         sample_time = 0
         policy_net.to(device)
@@ -267,10 +259,9 @@ def train(
             batch = memory.sample(batch_size)
             sample_time += time.time() - sample_tic
             optimize_model(batch, policy_net, target_net, optimizer, gamma, scaler)
-        # print(f"train_count: {train_count}, memory len {len(memory)}", end="")
-        print(f", optimize: {time.time() - optimize_tic:.2f}s", end="")
-        # print(f"(memory sample: {sample_time:.2f}s)", end="")
-        print(f", episode time: {time.time() - tic:.2f}s-", end="\r")
+        if verbose > 0:
+            print(f", optimize: {time.time() - optimize_tic:.2f}s", end="")
+            print(f", episode time: {time.time() - tic:.2f}s-", end="\r")
         tic = time.time()
         agent_brain.update_epsilon()
 
@@ -319,34 +310,54 @@ def train(
     )
 
 
+def _train_worker(args: tuple) -> ModelConfig:
+    config, env_params, train_params, force_train = args
+    should_train = force_train or not config.get_model_path().exists()
+    if not should_train:
+        print(f"Model {config.get_model_full_name()} already exists. Skipping...")
+        return config
+
+    env = MultiRobotGridEnv(
+        **env_params,
+        **config.get_env_params(),
+    )
+    train_results = train(
+        env=env,
+        model_config=config,
+        **train_params,
+        **config.get_train_params(),
+        verbose=0,
+    )
+    best_trained_model, _, _, _ = train_results
+    model_path = config.get_model_path()
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(best_trained_model.state_dict(), model_path)
+    return config
+
+
 def run_training(
-    model: nn.Module,
-    num_robots: int,
-    num_batches: int,
-    target_update_interval: int,
-    best_model_window: int,
-    params: dict,
+    model_configs: list[ModelConfig],
+    env_base_params: dict,
+    train_base_params: dict,
+    force_train: bool,
+    num_processes: int,
 ) -> list[tuple[list[nn.Module], list[int], list[int]]]:
     """
     Runs models training.
-
-    Returns:
-        list[nn.Module]: List of trained models.
-        list[float]: List of completed tasks per episode.
-        list[float]: List of steps per episode.
-
     """
-    params = params.copy()
-    params["model"] = model
-    params["env_max_robots"] = num_robots
-    params["env_num_tasks"] = num_robots * 5
-    params["env_agent_view_size"] = model.view_size
-    params["num_batches"] = num_batches
-    params["target_update_interval"] = target_update_interval
-    params["best_model_window"] = best_model_window
-    params["tick_increase_per_episode"] = 0.5
+    tasks = [
+        (config, env_base_params, train_base_params, force_train)
+        for config in model_configs
+    ]
+    trained_configs = []
 
-    return train(**params)
+    with ProcessPoolExecutor(max_workers=num_processes) as executor:
+        futures = [executor.submit(_train_worker, task) for task in tasks]
+        for future in tqdm(
+            as_completed(futures), total=len(tasks), desc="Training models"
+        ):
+            completed_config = future.result()
+            trained_configs.append(completed_config)
 
 
 if __name__ == "__main__":
