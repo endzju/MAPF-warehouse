@@ -298,7 +298,7 @@ def train(
             avg_delivery_times=window_avg_delivery_times,
             avg_manhattan_times=window_avg_manhattan_times,
             path=plot_path,
-            checkpoint_name=model.checkpoint_name,
+            checkpoint_name=model_config.get_params_string(),
             window_size=best_model_window,
         )
 
@@ -314,7 +314,6 @@ def _train_worker(args: tuple) -> ModelConfig:
     config, env_params, train_params, force_train = args
     should_train = force_train or not config.get_model_path().exists()
     if not should_train:
-        print(f"Model {config.get_model_full_name()} already exists. Skipping...")
         return config
 
     env = MultiRobotGridEnv(

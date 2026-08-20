@@ -31,7 +31,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     model_class_list = [MLP]
     hidden_layers_list = [{"mlp_layers": [512]}]
     agent_view_size_list = [7]
-    buffer_length_list = [1_000_000, 2_000_000]
+    buffer_length_list = [1_000_000]
     batch_size_list = [4096 * 4]
     num_robot_list = [60]
     num_batches_list = [100, 110, 90]
