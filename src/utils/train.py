@@ -344,10 +344,11 @@ def run_training(
     """
     Runs models training.
     """
-    tasks = [
-        (config, env_base_params, train_base_params, force_train)
-        for config in model_configs
-    ]
+    tasks = []
+    for config in model_configs:
+        if config.get_model_path().exists() and not force_train:
+            continue
+        tasks.append((config, env_base_params, train_base_params, force_train))
     trained_configs = []
 
     with ProcessPoolExecutor(max_workers=num_processes) as executor:

@@ -28,32 +28,43 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     # 4096 * 8  best num batches ~ 50 - 60, best result -> 72% very unstable
     # note for future me:
 
-    model_class_list = [MLP]
-    hidden_layers_list = [{"mlp_layers": [512]}]
-    agent_view_size_list = [7]
-    buffer_length_list = [1_000_000]
-    batch_size_list = [4096 * 4]
-    num_robot_list = [60]
-    num_batches_list = [100, 110, 90]
-    target_update_interval_list = [60]
-    suffix_list = ["sample1", "sample2", "sample3", "sample4", "sample5"]
-
-    train_params_grid = {
-        "model_class": model_class_list,
-        "hidden_layers": hidden_layers_list,
-        "view_size": agent_view_size_list,
-        "buffer_length": buffer_length_list,
-        "batch_size": batch_size_list,
-        "num_robots": num_robot_list,
-        "num_batches": num_batches_list,
-        "target_update_interval": target_update_interval_list,
-        "suffix": suffix_list,
-    }
     models_settings = []
-    train_workers = 4
     eval_robot_list = [n for n in range(10, 101, 5)]
+    train_workers = 5
 
-    add_product(train_params_grid, models_settings)
+    base_params = {
+        "model_class": [MLP],
+        "hidden_layers": [{"mlp_layers": [512]}],
+        "view_size": [7],
+        "buffer_length": [1_000_000],
+        "num_robots": [60],
+        "target_update_interval": [60],
+        "suffix": ["sample1"],
+    }
+    variations = [
+        {"batch_size": [4096 * 16], "num_batches": [20, 30, 40, 50, 60]},
+        {"batch_size": [4096 * 8], "num_batches": [80, 90, 100, 110, 120]},
+        {"batch_size": [4096 * 4], "num_batches": [80, 90, 100, 110, 120]},
+        {"batch_size": [4096 * 2], "num_batches": [120, 130, 140, 150, 160, 170, 180]},
+        {"batch_size": [4096], "num_batches": [180, 190, 200, 210, 220, 230, 240]},
+        {"batch_size": [2048], "num_batches": [240, 250, 260, 270, 280, 290, 300]},
+        {"batch_size": [1024], "num_batches": [300, 310, 320, 330, 340, 350, 360]},
+        {"batch_size": [512], "num_batches": [360, 370, 380, 390, 400, 410, 420]},
+        {"batch_size": [4096 * 4], "num_batches": [70, 60, 50]},
+        {"batch_size": [4096 * 8], "num_batches": [71, 69, 72, 68]},
+        {"batch_size": [4096 * 2], "num_batches": [110, 100, 90]},
+        {"batch_size": [4096], "num_batches": [100, 120, 140, 160]},
+        {
+            "batch_size": [4096 * 8],
+            "num_batches": [70],
+            "suffix": ["sample1", "sample2", "sample3", "sample4", "sample5"],
+        },
+    ]
+
+    for var in variations:
+        grid = base_params.copy()
+        grid.update(var)
+        add_product(grid, models_settings)
 
     # End of config
 
