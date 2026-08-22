@@ -15,16 +15,7 @@ class pyvrp_solver:
             list[int]: List of coordinates
 
         """
-        coords = [
-            (0, 0),
-            (10, 5),
-            (20, 10),
-            (15, 20),
-            (5, 15),
-        ]
-
         m = Model()
-
         m.add_vehicle_type(
             num_available=1,
             capacity=10_000,
@@ -51,5 +42,5 @@ class pyvrp_solver:
             stop=MaxRuntime(1),
             seed=42,
         )
-
-        return list(result.best.routes()[0])
+        route_indices = [i - 1 for i in list(result.best.routes()[0])]
+        return route_indices

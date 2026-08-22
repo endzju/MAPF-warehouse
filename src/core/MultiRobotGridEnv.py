@@ -273,7 +273,10 @@ class MultiRobotGridEnv(gym.Env):
             task.reset()
             depot = self.input_depots[idx % len(self.input_depots)]
             if self.task_tsp:
-                goal_positions = solver.solve([depot.pos] + task.goal_positions)
+                goal_positions_indices = solver.solve([depot.pos] + task.goal_positions)
+                task.goal_positions = [
+                    task.goal_positions[i] for i in goal_positions_indices
+                ]
             depot.add_task(task)
 
         observations = {}

@@ -50,16 +50,36 @@ def run_experiments(force_train: bool = True, eval: bool = True):
         {"batch_size": [2048], "num_batches": [240, 250, 260, 270, 280, 290, 300]},
         {"batch_size": [1024], "num_batches": [300, 310, 320, 330, 340, 350, 360]},
         {"batch_size": [512], "num_batches": [360, 370, 380, 390, 400, 410, 420]},
+        {"batch_size": [4096 * 16], "num_batches": [70, 80, 90, 100]},
         {"batch_size": [4096 * 4], "num_batches": [70, 60, 50]},
         {"batch_size": [4096 * 8], "num_batches": [71, 69, 72, 68]},
         {"batch_size": [4096 * 2], "num_batches": [110, 100, 90]},
-        {"batch_size": [4096], "num_batches": [100, 120, 140, 160]},
+        {"batch_size": [4096], "num_batches": [90, 80, 70, 60, 50, 40, 30, 20]},
         {
             "batch_size": [4096 * 8],
             "num_batches": [70],
             "suffix": ["sample1", "sample2", "sample3", "sample4", "sample5"],
         },
+        {"batch_size": [512], "num_batches": [100, 200, 300, 400, 500]},
+        {"batch_size": [1024], "num_batches": [100, 200, 300, 400, 500]},
+        {"batch_size": [2048], "num_batches": [100, 200, 300, 400, 500]},
+        {
+            "batch_size": [4096],
+            "num_batches": [30, 50, 80, 100, 300, 400, 500, 1000, 2000],
+        },
+        {"batch_size": [4096 * 2], "num_batches": [80, 70, 60, 95, 105]},
+        {"batch_size": [4096 * 4], "num_batches": [75, 65, 55, 85, 95]},
+        {"batch_size": [4096 * 16], "num_batches": [70, 80, 90, 100]},
     ]
+
+    # batch_size 512 in progress
+    # batch_size 1024 in progress
+    # batch_size 2048 in progress
+    # batch_size 4096 in progress
+    # batch_size 4096 * 2 in progress
+    # batch_size 4096 * 4 in progress
+    # batch_size 4096 * 8 best num batches ~70, best result -> 74%
+    # batch_size 4096 * 16 in progress
 
     for var in variations:
         grid = base_params.copy()
