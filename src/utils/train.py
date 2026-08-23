@@ -311,19 +311,17 @@ def train(
 
 
 def _train_worker(args: tuple) -> ModelConfig:
-    config, env_params, train_params, force_train = args
+    config, force_train = args
     should_train = force_train or not config.get_model_path().exists()
     if not should_train:
         return config
 
     env = MultiRobotGridEnv(
-        **env_params,
         **config.get_env_params(),
     )
     train_results = train(
         env=env,
         model_config=config,
-        **train_params,
         **config.get_train_params(),
         verbose=0,
     )
@@ -336,8 +334,6 @@ def _train_worker(args: tuple) -> ModelConfig:
 
 def run_training(
     model_configs: list[ModelConfig],
-    env_base_params: dict,
-    train_base_params: dict,
     force_train: bool,
     num_processes: int,
 ) -> list[tuple[list[nn.Module], list[int], list[int]]]:
@@ -348,7 +344,7 @@ def run_training(
     for config in model_configs:
         if config.get_model_path().exists() and not force_train:
             continue
-        tasks.append((config, env_base_params, train_base_params, force_train))
+        tasks.append((config, force_train))
     trained_configs = []
 
     with ProcessPoolExecutor(max_workers=num_processes) as executor:

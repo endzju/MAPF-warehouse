@@ -101,18 +101,10 @@ def _eval_worker(args: tuple) -> ModelConfig:
 
 def run_evaluation(
     model_configs: list[ModelConfig],
-    env_base_params: dict,
     eval_robot_list: list[int],
     num_simulations: int,
     num_processes: int,
 ) -> None:
-
-    # tic = time.time()
-    # print(f"Evaluating model: {model.model_name}_{model.checkpoint_name}")
-
-    # elapsed = time.time() - tic
-    # print(f"Evaluation time: {elapsed / 60:.1f} min")
-
     tasks = []
     for model_config in model_configs:
         data_path = (
@@ -128,15 +120,13 @@ def run_evaluation(
                 data = json.load(f)
             keys = map(int, data.keys())
             missing_num_robots = list(set(eval_robot_list) - set(keys))
-        env_params = env_base_params.copy()
-        env_params.update(model_config.get_env_params())
-        env_params["env_step_limit"] = 50000
+        env_params = model_config.get_env_params()
+        env_params["step_limit"] = 50000
         for num_robots in missing_num_robots:
             task_env_params = env_params.copy()
-            task_env_params["env_max_robots"] = num_robots
-            task_env_params["env_num_tasks"] = num_robots * 5
+            task_env_params["max_robots"] = num_robots
+            task_env_params["num_tasks"] = num_robots * 5
             tasks.append((model_config, task_env_params, num_simulations, data_path))
-
     eval_configs = []
 
     with ProcessPoolExecutor(max_workers=num_processes) as executor:

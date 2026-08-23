@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -8,6 +9,10 @@ import torch
 class ModelConfig:
     model_class: type
     hidden_layers: dict
+    device: torch.device
+    grid_size: tuple[int, int]
+    step_limit: 1500
+    task_length: int = 5
     view_size: int = 7
     view_dims: int = 4
     goal_vec_size: int = 2
@@ -28,6 +33,12 @@ class ModelConfig:
     buffer_length: int = 1024**2
     target_update_interval: int = 60
     gamma: float = 0.99
+    num_episodes: int = 1000
+    epsilon: float = 1.0
+    epsilon_min: float = 0
+    epsilon_decay: float = 0.995
+    epsilon_episodes: int = math.inf
+    best_model_window: int = 10
 
     def build_model(self):
         """Create model instance."""
@@ -133,13 +144,23 @@ class ModelConfig:
             "x_position_float": self.x_position_float,
             "y_position_float": self.y_position_float,
             "task_tsp": self.task_tsp,
+            "grid_size": self.grid_size,
+            "step_limit": self.step_limit,
+            "task_length": self.task_length,
         }
 
     def get_train_params(self) -> dict:
         return {
+            "device": self.device,
             "batch_size": self.batch_size,
             "num_batches": self.num_batches,
             "buffer_length": self.buffer_length,
             "target_update_interval": self.target_update_interval,
             "gamma": self.gamma,
+            "num_episodes": self.num_episodes,
+            "epsilon": self.epsilon,
+            "epsilon_min": self.epsilon_min,
+            "epsilon_decay": self.epsilon_decay,
+            "epsilon_episodes": self.epsilon_episodes,
+            "best_model_window": self.best_model_window,
         }
