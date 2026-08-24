@@ -81,31 +81,37 @@ def run_experiments(force_train: bool = True, eval: bool = True):
         },
         {
             "batch_size": [4096 * 2],
-            "num_batches": [100, 95, 90, 85, 120],
+            "num_batches": [100, 95, 90, 85, 120, 75, 80, 70, 65, 60, 50],
             "suffix": ["longer1"],
             "num_episodes": [1500],
         },
         {
             "batch_size": [4096 * 4],
-            "num_batches": [30, 40, 50, 55, 60, 70, 80, 90],
-            "suffix": ["longer1"],
+            "num_batches": [55, 60, 65],
+            "suffix": ["longer1", "longer2"],
             "num_episodes": [1500],
         },
         {
             "batch_size": [4096 * 8],
-            "num_batches": [50, 60, 70],
-            "suffix": ["longer1"],
+            "num_batches": [40, 45, 50, 55],
+            "suffix": ["longer1", "longer2"],
             "num_episodes": [1500],
         },
         {
             "batch_size": [4096 * 16],
-            "num_batches": [40, 50, 60, 70],
+            "num_batches": [30, 35, 40, 45],
             "suffix": ["longer1"],
             "num_episodes": [1500],
         },
         {
             "batch_size": [4096 * 32],
-            "num_batches": [30, 40, 50],
+            "num_batches": [50],
+            "suffix": ["longer1", "longer2", "longer3"],
+            "num_episodes": [1500],
+        },
+        {
+            "batch_size": [4096 * 32],
+            "num_batches": [25, 30, 35, 40, 45],
             "suffix": ["longer1"],
             "num_episodes": [1500],
         },
@@ -115,12 +121,11 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     # batch_size 1024   	brak widocznego maksymalnego wyniku
     # batch_size 2048 		best num batches ~ 150, best result -> 73.8%
     # batch_size 4096 		best num batches ~ 104, best result -> 74.5$
-    # batch_size 4096 * 2 	best num batches ~ 100, best result -> 74%, needs more epoch than 1000
-    # batch_size 4096 * 4 	best num batches ~ 60-90, best result -> 73.5%, needs more epoch than 1000
-    # batch_size 4096 * 4	best num batches = 60, best result -> 74.5%
-    # batch_size 4096 * 8 	best num batches ~ 50-70, best result -> 74%, needs more epoch than 1000
-    # batch_size 4096 * 16 	best num batches ~ 50-70, best result -> 73.8%, needs more epoch than 1000
-    # batch_size 4096 * 32 	best num batches ~ 30-50, best result -> 74%, needs more epoch than 1000
+    # batch_size 4096 * 2 	best num batches ~ 75, best result -> 74.71%, in progress
+    # batch_size 4096 * 4 	best num batches ~ 65, best result -> 74.95%, in progress
+    # batch_size 4096 * 8 	best num batches ~ 50, best result -> 75.15%, in progress
+    # batch_size 4096 * 16 	best num batches ~ 40, best result -> 74.7%, in progress
+    # batch_size 4096 * 32 	best num batches ~ 40, best result -> 74.4%, in progress
 
     for var in variations:
         grid = base_params.copy()
