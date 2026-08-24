@@ -63,56 +63,64 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             "num_batches": [112, 116, 124, 128],
             "suffix": ["sample1", "sample2"],
         },
-        {"batch_size": [4096 * 2], "num_batches": [80, 70, 60, 95, 105]},
-        {"batch_size": [4096 * 4], "num_batches": [75, 65, 55, 85, 95]},
+        {"batch_size": [4096 * 2], "num_batches": [80, 75, 70, 65, 60, 55, 95, 105]},
+        {"batch_size": [4096 * 4], "num_batches": [75, 65, 55, 85, 95, 45, 40, 35, 30]},
         {"batch_size": [4096 * 16], "num_batches": [70, 80, 90, 100]},
         {"batch_size": [4096 * 32], "num_batches": [20, 30, 40, 50, 60, 70, 80, 90]},
         {
             "batch_size": [2048],
             "num_batches": [150],
             "suffix": ["longer1", "longer2"],
-            "num_episodes": [2000],
+            "num_episodes": [1500],
         },
         {
             "batch_size": [4096],
-            "num_batches": [100, 108, 116],
+            "num_batches": [100, 104, 108, 112, 116],
             "suffix": ["longer1"],
-            "num_episodes": [2000],
+            "num_episodes": [1500],
         },
         {
             "batch_size": [4096 * 2],
-            "num_batches": [100],
-            "suffix": ["longer1", "longer2"],
-            "num_episodes": [2000],
+            "num_batches": [100, 95, 90, 85, 120],
+            "suffix": ["longer1"],
+            "num_episodes": [1500],
         },
         {
             "batch_size": [4096 * 4],
-            "num_batches": [60, 70, 80, 90],
+            "num_batches": [30, 40, 50, 55, 60, 70, 80, 90],
             "suffix": ["longer1"],
-            "num_episodes": [2000],
+            "num_episodes": [1500],
         },
         {
             "batch_size": [4096 * 8],
             "num_batches": [50, 60, 70],
             "suffix": ["longer1"],
-            "num_episodes": [2000],
+            "num_episodes": [1500],
         },
         {
             "batch_size": [4096 * 16],
             "num_batches": [40, 50, 60, 70],
             "suffix": ["longer1"],
-            "num_episodes": [2000],
+            "num_episodes": [1500],
+        },
+        {
+            "batch_size": [4096 * 32],
+            "num_batches": [30, 40, 50],
+            "suffix": ["longer1"],
+            "num_episodes": [1500],
         },
     ]
 
     # batch_size 512    	brak widocznego maksymalnego wyniku
     # batch_size 1024   	brak widocznego maksymalnego wyniku
-    # batch_size 2048 		best num batches ~ 150, best result -> 73.5%, needs more epoch than 1000
-    # batch_size 4096 		best num batches ~ 100-116, best result -> 74$, needs more epoch than 1000
+    # batch_size 2048 		best num batches ~ 150, best result -> 73.8%
+    # batch_size 4096 		best num batches ~ 104, best result -> 74.5$
     # batch_size 4096 * 2 	best num batches ~ 100, best result -> 74%, needs more epoch than 1000
     # batch_size 4096 * 4 	best num batches ~ 60-90, best result -> 73.5%, needs more epoch than 1000
+    # batch_size 4096 * 4	best num batches = 60, best result -> 74.5%
     # batch_size 4096 * 8 	best num batches ~ 50-70, best result -> 74%, needs more epoch than 1000
     # batch_size 4096 * 16 	best num batches ~ 50-70, best result -> 73.8%, needs more epoch than 1000
+    # batch_size 4096 * 32 	best num batches ~ 30-50, best result -> 74%, needs more epoch than 1000
 
     for var in variations:
         grid = base_params.copy()
