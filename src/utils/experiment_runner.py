@@ -41,77 +41,24 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     }
     variations = [
         {
-            "batch_size": [2048],
-            "num_batches": [150, 160, 170, 180, 190, 200, 210, 220, 230, 240, 250],
-        },
-        {
-            "batch_size": [2048],
-            "num_batches": [140, 130, 120, 110, 100, 90, 80],
-        },
-        {
-            "batch_size": [4096],
-            "num_batches": [100],
-            "suffix": ["sample2", "sample3", "sample4", "sample5"],
-        },
-        {
-            "batch_size": [4096],
-            "num_batches": [92, 96, 104, 108],
-            "suffix": ["sample1", "sample2"],
-        },
-        {
-            "batch_size": [4096],
-            "num_batches": [112, 116, 124, 128],
-            "suffix": ["sample1", "sample2"],
-        },
-        {"batch_size": [4096 * 2], "num_batches": [80, 75, 70, 65, 60, 55, 95, 105]},
-        {"batch_size": [4096 * 4], "num_batches": [75, 65, 55, 85, 95, 45, 40, 35, 30]},
-        {"batch_size": [4096 * 16], "num_batches": [70, 80, 90, 100]},
-        {"batch_size": [4096 * 32], "num_batches": [20, 30, 40, 50, 60, 70, 80, 90]},
-        {
-            "batch_size": [2048],
-            "num_batches": [150],
-            "suffix": ["longer1", "longer2"],
-            "num_episodes": [1500],
-        },
-        {
-            "batch_size": [4096],
-            "num_batches": [100, 104, 108, 112, 116],
-            "suffix": ["longer1"],
-            "num_episodes": [1500],
-        },
-        {
-            "batch_size": [4096 * 2],
-            "num_batches": [100, 95, 90, 85, 120, 75, 80, 70, 65, 60, 50],
-            "suffix": ["longer1"],
-            "num_episodes": [1500],
-        },
-        {
-            "batch_size": [4096 * 4],
-            "num_batches": [55, 60, 65],
-            "suffix": ["longer1", "longer2"],
-            "num_episodes": [1500],
-        },
-        {
-            "batch_size": [4096 * 8],
-            "num_batches": [40, 45, 50, 55],
-            "suffix": ["longer1", "longer2"],
-            "num_episodes": [1500],
-        },
-        {
-            "batch_size": [4096 * 16],
-            "num_batches": [30, 35, 40, 45],
-            "suffix": ["longer1"],
-            "num_episodes": [1500],
-        },
-        {
-            "batch_size": [4096 * 32],
-            "num_batches": [50],
+            "batch_size": [4096 * 6],
+            "num_batches": [30, 35, 40],
             "suffix": ["longer1", "longer2", "longer3"],
             "num_episodes": [1500],
         },
         {
-            "batch_size": [4096 * 32],
-            "num_batches": [25, 30, 35, 40, 45],
+            "model_class": [MLP],
+            "batch_size": [4096 * 6],
+            "num_batches": [45],
+            "hidden_layers": [
+                {"mlp_layers": [128]},
+                {"mlp_layers": [256]},
+                {"mlp_layers": [512]},
+                {"mlp_layers": [1024]},
+                {"mlp_layers": [128, 64]},
+                {"mlp_layers": [256, 128]},
+                {"mlp_layers": [512, 256]},
+            ],
             "suffix": ["longer1"],
             "num_episodes": [1500],
         },
@@ -123,9 +70,10 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     # batch_size 4096 		best num batches ~ 104, best result -> 74.5$
     # batch_size 4096 * 2 	best num batches ~ 75, best result -> 74.71%, in progress
     # batch_size 4096 * 4 	best num batches ~ 65, best result -> 74.95%, in progress
+    # batch_size 4096 * 6	best num batches ~ 45, best result -> 74.9%, very stable
     # batch_size 4096 * 8 	best num batches ~ 50, best result -> 75.15%, in progress
-    # batch_size 4096 * 16 	best num batches ~ 40, best result -> 74.7%, in progress
-    # batch_size 4096 * 32 	best num batches ~ 40, best result -> 74.4%, in progress
+    # batch_size 4096 * 16 	best num batches ~ 45, best result -> 74.89%, in progress
+    # batch_size 4096 * 32 	best num batches ~ 50, best result -> 74.93%, in progress
 
     for var in variations:
         grid = base_params.copy()
