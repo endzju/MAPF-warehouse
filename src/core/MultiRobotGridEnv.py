@@ -33,7 +33,7 @@ class MultiRobotGridEnv(gym.Env):
         output_depots: list[Depot] | None = None,
         step_limit: int = 100,
         task_length: int = 5,
-        finish_times: dict[TaskType, int] | None = None,
+        action_times: dict[TaskType, int] | None = None,
         tasks: list[Task] | None = None,
         num_tasks: int = 100,
         max_robots: int = 100,
@@ -57,10 +57,11 @@ class MultiRobotGridEnv(gym.Env):
         self.avg_manhattan_distance = 0
         self.avg_delivery_time = 0
         self.deliveries = 0
-        self.finish_times = finish_times or {
+        self.action_times = action_times or {
             TaskType.ENTER: 1,
             TaskType.PICKUP: 1,
             TaskType.LEAVE: 1,
+            TaskType.MOVE: 1,
         }
         self.given_tasks = tasks or []
         self.tasks = []
@@ -371,11 +372,9 @@ class MultiRobotGridEnv(gym.Env):
         random.shuffle(agent_list)
 
         for agent in agent_list:
-            if agent.is_idle():
+            if agent.is_busy():
                 continue
-            action = actions.get(agent.id)
-            if action is None:
-                raise ValueError("Agent has no action")
+            action = actions.get(agent.id, 4)  # 4 = wait
 
             if agent.is_stuck():
                 rewards[agent.id] = 0
@@ -394,10 +393,15 @@ class MultiRobotGridEnv(gym.Env):
             else:
                 rewards[agent.id] = self.reward(agent, next_pos, previous_blocked)
 
+        for agent in agent_list:
+            agent.step()
+
+        return rewards
+
+    def _collect_ready_robots(self):
         remove_agents = set()
-        # Move agents and remove those that are done
         for agent in self.agents:
-            if agent.step():
+            if agent.should_return_to_depot():
                 self.avg_delivery_time = (
                     self.avg_delivery_time * self.deliveries + agent.step_count
                 ) / (self.deliveries + 1)
@@ -406,8 +410,6 @@ class MultiRobotGridEnv(gym.Env):
                 agent.in_depot.stored_robots += 1
         self.agents -= remove_agents
         self.deleted_agents += list(remove_agents)
-
-        return rewards
 
     def _deploy_robots(self, previous_blocked):
         # deploy robot if tasks left
@@ -432,9 +434,11 @@ class MultiRobotGridEnv(gym.Env):
                         in_depot=in_depot,
                         out_depot=out_depot,
                         id=self._next_id(),
+                        action_times=self.action_times,
                     )
-                agent.idle_time = self.finish_times[TaskType.ENTER]
+                agent.busy_time = self.action_times[TaskType.ENTER]
                 self.agents.add(agent)
+                previous_blocked.add(in_depot.pos)
                 in_depot.stored_robots -= 1
 
     def _get_observations(self) -> dict[int, np.ndarray]:
@@ -446,7 +450,7 @@ class MultiRobotGridEnv(gym.Env):
         view_grids = self._build_view_grids(agent_positions, agent_goal_positions)
 
         for agent in self.agents:
-            if not agent.is_idle():
+            if not agent.is_busy():
                 observations[agent.id] = self._get_obs(
                     agent=agent,
                     view_grids=view_grids,
@@ -455,19 +459,20 @@ class MultiRobotGridEnv(gym.Env):
         return observations
 
     def step(self, actions: dict[int, int]):
+        self._collect_ready_robots()  # We need to do this before the agents move
         previous_blocked = self._obstacle_cells_cache | self.get_agent_positions(
             include_next_pos=True
         )
-        rewards = self._step_agents(actions=actions, previous_blocked=previous_blocked)
         self._deploy_robots(previous_blocked=previous_blocked)
-        observations = self._get_observations()
+        rewards = self._step_agents(actions=actions, previous_blocked=previous_blocked)
+        new_observations = self._get_observations()
 
         self.step_count += 1
 
         truncated = self.step_count >= self.step_limit
         terminated = self._all_tasks_completed()
 
-        return observations, rewards, terminated, truncated, {}
+        return new_observations, rewards, terminated, truncated, {}
 
     def _goal_vector(self, agent: DeliveryRobot) -> np.ndarray:
         if agent.goal_pos is None:
@@ -579,9 +584,9 @@ class MultiRobotGridEnv(gym.Env):
                 # waiting to enter
                 positions = [in_depot.pos] + task.goal_positions + [out_depot.pos]
                 time = (
-                    len(task.goal_positions) * self.finish_times[TaskType.PICKUP]
-                    + self.finish_times[TaskType.ENTER]
-                    + self.finish_times[TaskType.LEAVE]
+                    len(task.goal_positions) * self.action_times[TaskType.PICKUP]
+                    + self.action_times[TaskType.ENTER]
+                    + self.action_times[TaskType.LEAVE]
                 )
                 for i in range(len(positions) - 1):
                     time += manhattan_distance(positions[i], positions[i + 1])
@@ -593,7 +598,7 @@ class MultiRobotGridEnv(gym.Env):
                 exit_time = time_from_start + time
                 heapq.heappush(exit_times_heap, exit_time)
                 exit_times.append(exit_time)
-                time_from_start += 1 + self.finish_times[TaskType.ENTER]
+                time_from_start += 1 + self.action_times[TaskType.ENTER]
 
             out_time_dict[out_depot] += exit_times
 
@@ -609,7 +614,7 @@ class MultiRobotGridEnv(gym.Env):
                 diff = new_dist - time_list[i]
                 delivery_time += diff
                 time_list[i] = new_dist
-                min_dist = time_list[i] + 1 + self.finish_times[TaskType.LEAVE]
+                min_dist = time_list[i] + 1 + self.action_times[TaskType.LEAVE]
         return delivery_time / len(self.tasks)
 
     def handle_events(self):
@@ -826,6 +831,21 @@ class MultiRobotGridEnv(gym.Env):
                 moving_pos_x = agent.pos_history[-1][0] + animation_progress * dx
                 moving_pos_y = agent.pos_history[-1][1] + animation_progress * dy
 
+            agent_scale = 1
+            # Entering grid
+            if agent.is_entering_grid():
+                agent_scale = (
+                    agent.action_times[TaskType.ENTER]
+                    - agent.busy_time
+                    - 1
+                    + animation_progress
+                ) / agent.action_times[TaskType.ENTER]
+            elif agent.is_leaving_grid():
+                agent_scale = (
+                    agent._get_exit_wait_length() - 1 + animation_progress
+                ) / agent.action_times[TaskType.LEAVE]
+                agent_scale = 1 - agent_scale
+
             pos_x = offset_x + round(moving_pos_x * dynamic_cell_size)
             pos_y = offset_y + round(moving_pos_y * dynamic_cell_size)
 
@@ -839,14 +859,15 @@ class MultiRobotGridEnv(gym.Env):
             if robot_rect.collidepoint(mouse_x, mouse_y):
                 hovered_agent = agent
 
+            scale_offset = round((1 - agent_scale) * dynamic_cell_size)
             robot_scaled = self._tinted_sprite(
                 self.robot_img,
                 "robot",
-                dynamic_cell_size,
+                round(dynamic_cell_size * agent_scale),
                 self._agent_color(agent.id),
             )
 
-            canvas.blit(robot_scaled, (pos_x, pos_y))
+            canvas.blit(robot_scaled, (pos_x + scale_offset, pos_y + scale_offset))
 
             agent_text = self._label(f"ID:{agent.id}", (0, 0, 0))
             canvas.blit(agent_text, (pos_x, pos_y - 15))

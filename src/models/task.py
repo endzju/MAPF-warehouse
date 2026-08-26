@@ -29,7 +29,7 @@ class Task:
         return self.task_index == len(self.goal_positions)
 
     def get_delivered_goals(self) -> list[tuple[int, int]]:
-        return self.goal_positions[: self.task_index - 1]
+        return self.goal_positions[: self.task_index]
 
     def reset(self):
         self.task_index = 0

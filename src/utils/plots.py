@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from torch import nn
 
+from src.neural_networks.model_config import ModelConfig
+
 plot_colors = [
     "#000000",  # black
     "#E69F00",  # orange
@@ -107,28 +109,36 @@ def plot_avg_delivery_times(
 
 
 def read_model_data(
-    model: nn.Module,
+    model_config: ModelConfig,
 ) -> dict:
-    dir_path = Path(__file__).parent.parent / "data" / "eval" / model.model_name
-    data_path = (dir_path / model.checkpoint_name).with_suffix(".json")
+    data_path = (
+        Path(__file__).parent.parent
+        / "data"
+        / "eval"
+        / model_config.get_model_dir_name()
+        / f"{model_config.get_params_string()}.json"
+    )
     with open(data_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def read_models_data(models: list[nn.Module]):
+def read_models_data(model_configs: list[ModelConfig]):
     data = {}
-    for model in models:
-        data[f"{model.model_name}_{model.checkpoint_name}"] = read_model_data(model)
+    for model_config in model_configs:
+        model_data = read_model_data(model_config)
+        if model_data is None:
+            continue
+        data[model_config.get_model_full_name()] = model_data
 
     return data
 
 
 def plot_delivery_efficiency(
-    models: list[nn.Module],
+    model_configs: list[nn.Module],
     x_ticks: list[int | str],
 ):
     x_ticks_set = {str(tick) for tick in x_ticks}
-    data = read_models_data(models=models)
+    data = read_models_data(model_configs=model_configs)
     plt.figure(figsize=(10, 6))
     for i, (model_name, evaluation) in enumerate(data.items()):
         evaluation = {k: v for k, v in evaluation.items() if k in x_ticks_set}

@@ -4,6 +4,7 @@ from itertools import islice
 # if TYPE_CHECKING:
 from src.models.depot import Depot
 from src.models.task import Task
+from src.utils.distance import manhattan_distance
 from src.utils.enums import TaskType
 
 
@@ -13,13 +14,13 @@ class DeliveryRobot:
     depot: Depot
     id: int
     was_blocked: bool
-    finish_times: dict[TaskType, int]
+    action_times: dict[TaskType, int]
     step_count: int
     goal_pos: tuple[int, int] | None
     task_type: TaskType | None
     next_pos: tuple[int, int] | None
     pos_history: deque[tuple[int, int]]
-    idle_time: int
+    busy_time: int
 
     def __init__(
         self,
@@ -28,8 +29,8 @@ class DeliveryRobot:
         in_depot: Depot,
         out_depot: Depot,
         id: int,
-        finish_times: dict[TaskType, int] | None = None,
-        idle_time=0,
+        action_times: dict[TaskType, int] | None = None,
+        busy_time=0,
     ):
         self.pos = position
         self.task = task
@@ -37,21 +38,23 @@ class DeliveryRobot:
         self.out_depot = out_depot
         self.id = id
         self.was_blocked = False
-        self.finish_times = finish_times or {
+        self.action_times = action_times or {
             TaskType.PICKUP: 1,
             TaskType.LEAVE: 1,
         }
         self.step_count: int = 0
-
+        self.move_count: int = 0
         self.goal_pos, self.task_type = None, None
         self.next_pos = None
         self.pos_history = deque()
-        self.idle_time = idle_time
+        self.busy_time = busy_time
+        self.should_exit = False
 
-    def step(self) -> bool:
+    def step(self):
         """
         Returns True if robot should be removed
         """
+        print("debug", self.id, self.pos, self.task_type, self.goal_pos, self.busy_time)
         if self.goal_pos is None and not self.task.is_completed():
             self.goal_pos, self.task_type = self.task.pop_next()
 
@@ -59,15 +62,27 @@ class DeliveryRobot:
         self.step_count += 1
 
         # wait if idle
-        if self.idle_time > 0:
-            self.idle_time = max(0, self.idle_time - 1)
+        if self.busy_time > 0:
+            self.busy_time = max(0, self.busy_time - 1)
             self.pos_history.append(self.pos)
-            return False
+            return
 
         # leave if on depot
         if self.task_type == TaskType.LEAVE and self.pos == self.out_depot.pos:
-            self.in_depot.finished_tasks.append(self.task)
-            return True
+            print(
+                "debug1",
+                self._get_exit_wait_length(),
+                self.action_times[TaskType.LEAVE],
+                self.pos,
+            )
+            if self._get_exit_wait_length() == self.action_times[TaskType.LEAVE] - 1:
+                self.pos_history.append(self.pos)
+                self.in_depot.finished_tasks.append(self.task)
+                print("SETTING TASK AS DONE, robotID:", self.id, self.pos)
+                self.should_exit = True
+            else:
+                self.pos_history.append(self.pos)
+            return
 
         # move
         self.move()
@@ -77,21 +92,31 @@ class DeliveryRobot:
             self.finish_goal()
             self._next_task()
 
-        return False
+        return
 
     def move(self):
+        if self.next_pos is None:
+            self.next_pos = self.pos
         self.pos_history.append(self.pos)
+        move_time = 1
+        if self.next_pos != self.pos:
+            self.busy_time = self.action_times[TaskType.MOVE] - 1
         if self.next_pos:
             self.pos = self.next_pos
             self.next_pos = None
 
     def finish_goal(self):
         if self.task_type == TaskType.LEAVE:
-            self.idle_time = self.finish_times[self.task_type] - 1
-        else:
-            self.idle_time = self.finish_times[self.task_type]
+            return
+        self.busy_time = self.action_times[self.task_type]
 
     def is_stuck(self) -> bool:
+        if (
+            self.pos == self.goal_pos
+            or manhattan_distance(self.pos, self.in_depot.pos) < 3
+            or manhattan_distance(self.pos, self.out_depot.pos) < 3
+        ):
+            return False
         stuck_time = 5
         if len(self.pos_history) < stuck_time:
             return False
@@ -100,7 +125,7 @@ class DeliveryRobot:
         return len(unique_positions) <= 2
 
     def set_next_pos(self, pos: tuple[int, int]):
-        if self.idle_time > 0:
+        if self.busy_time > 0:
             return
         self.next_pos = pos
 
@@ -120,8 +145,26 @@ class DeliveryRobot:
             and self.task.is_completed()
         )
 
-    def is_idle(self) -> bool:
-        return self.idle_time > 0
+    def is_busy(self) -> bool:
+        return self.busy_time > 0
+
+    def is_entering_grid(self) -> bool:
+        return len(self.pos_history) <= self.action_times[TaskType.ENTER]
+
+    def is_leaving_grid(self) -> bool:
+        return (
+            self.pos_history and self.pos == self.pos_history[-1] == self.out_depot.pos
+        )
+
+    def _get_exit_wait_length(self) -> int:
+        count = 0
+        for idx in range(-1, -self.action_times[TaskType.LEAVE] - 1, -1):
+            if self.pos_history[idx] == self.out_depot.pos:
+                count += 1
+        return count
+
+    def should_return_to_depot(self) -> bool:
+        return self.should_exit
 
     def _next_task(self) -> None:
         if self.task.is_completed():
@@ -138,13 +181,15 @@ class DeliveryRobot:
         return abs(pos[0] - self.goal_pos[0]) + abs(pos[1] - self.goal_pos[1])
 
     def reset(self):
-        self.idle_time = 0
+        self.busy_time = 0
         self.step_count = 0
+        self.move_count = 0
         self.was_blocked = False
         self.pos_history = deque()
         self.next_pos = None
         self.task_type = None
         self.goal_pos = None
+        self.should_exit = False
 
     def __eq__(self, other: "DeliveryRobot"):
         return isinstance(other, DeliveryRobot) and self.id == other.id

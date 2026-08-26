@@ -5,7 +5,7 @@ from pathlib import Path
 import torch
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class ModelConfig:
     model_class: type
     hidden_layers: dict
@@ -30,7 +30,7 @@ class ModelConfig:
 
     batch_size: int = 4096 * 4
     num_batches: int = 100
-    buffer_length: int = 1024**2
+    buffer_length: int = 1_000_000
     target_update_interval: int = 60
     gamma: float = 0.99
     num_episodes: int = 1000
@@ -44,10 +44,10 @@ class ModelConfig:
         """Create model instance."""
         return self.model_class(model_config=self)
 
-    def load_model(self):
+    def load_model(self) -> torch.nn.Module:
         """Create model instance and load weights from file."""
         model = self.build_model()
-        model.load_state_dict(torch.load(model.get_model_path(), weights_only=True))
+        model.load_state_dict(torch.load(self.get_model_path(), weights_only=True))
         return model
 
     def get_view_input_size(self) -> int:
@@ -68,7 +68,7 @@ class ModelConfig:
     def get_output_size(self) -> int:
         return self.n_actions
 
-    def get_model_dir_name(self):
+    def get_model_dir_name(self) -> str:
         name = ""
         if "cnn_layers" in self.hidden_layers:
             name += "CNN_" + "_".join(
@@ -79,13 +79,13 @@ class ModelConfig:
 
         return name
 
-    def get_model_dir_path(self):
+    def get_model_dir_path(self) -> Path:
         return Path(__file__).parent / "models" / self.get_model_dir_name()
 
-    def get_model_path(self):
+    def get_model_path(self) -> Path:
         return self.get_model_dir_path() / f"{self.get_params_string()}.pth"
 
-    def get_model_full_name(self):
+    def get_model_full_name(self) -> str:
         return f"{self.get_model_dir_name()}_{self.get_params_string()}"
 
     def get_params_string(self) -> str:

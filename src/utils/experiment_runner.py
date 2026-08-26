@@ -2,6 +2,7 @@ from itertools import product
 
 import torch
 
+from src.neural_networks.architectures.cnn import CNN
 from src.neural_networks.architectures.mlp import MLP
 from src.neural_networks.model_config import ModelConfig
 from src.utils.evaluate import run_evaluation
@@ -21,10 +22,10 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     print(f"Device: {device}")
 
     # CONFIG
-
+    model_classes = [MLP, CNN]
     models_settings = []
     eval_robot_list = [n for n in range(10, 101, 5)]
-    train_workers = 5
+    train_workers = 4
 
     base_params = {
         "grid_size": [(20, 20)],
@@ -38,18 +39,23 @@ def run_experiments(force_train: bool = True, eval: bool = True):
         "num_robots": [60],
         "target_update_interval": [60],
         "suffix": ["sample1"],
+        "batch_size": [4096 * 6],
+        "num_batches": [45],
     }
     variations = [
         {
-            "batch_size": [4096 * 6],
             "num_batches": [30, 35, 40],
             "suffix": ["longer1", "longer2", "longer3"],
             "num_episodes": [1500],
         },
         {
+            "batch_size": [4096 * 8],
+            "num_batches": [50],
+            "suffix": ["longer1", "longer2", "longer3", "longer4", "longer5"],
+            "num_episodes": [1500],
+        },
+        {
             "model_class": [MLP],
-            "batch_size": [4096 * 6],
-            "num_batches": [45],
             "hidden_layers": [
                 {"mlp_layers": [128]},
                 {"mlp_layers": [256]},
@@ -59,8 +65,22 @@ def run_experiments(force_train: bool = True, eval: bool = True):
                 {"mlp_layers": [256, 128]},
                 {"mlp_layers": [512, 256]},
             ],
+            "view_size": [7, 9, 11],
             "suffix": ["longer1"],
             "num_episodes": [1500],
+        },
+        {
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [16]},
+                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [32]},
+                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [64]},
+                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [128]},
+                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [512]},
+            ],
+            "view_size": [7],
+            "suffix": ["sample1"],
         },
     ]
 
@@ -68,12 +88,12 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     # batch_size 1024   	brak widocznego maksymalnego wyniku
     # batch_size 2048 		best num batches ~ 150, best result -> 73.8%
     # batch_size 4096 		best num batches ~ 104, best result -> 74.5$
-    # batch_size 4096 * 2 	best num batches ~ 75, best result -> 74.71%, in progress
-    # batch_size 4096 * 4 	best num batches ~ 65, best result -> 74.95%, in progress
+    # batch_size 4096 * 2 	best num batches ~ 75, best result -> 74.71%
+    # batch_size 4096 * 4 	best num batches ~ 65, best result -> 74.95%
     # batch_size 4096 * 6	best num batches ~ 45, best result -> 74.9%, very stable
-    # batch_size 4096 * 8 	best num batches ~ 50, best result -> 75.15%, in progress
-    # batch_size 4096 * 16 	best num batches ~ 45, best result -> 74.89%, in progress
-    # batch_size 4096 * 32 	best num batches ~ 50, best result -> 74.93%, in progress
+    # batch_size 4096 * 8 	best num batches ~ 50, best result -> 75.15%
+    # batch_size 4096 * 16 	best num batches ~ 45, best result -> 74.89%
+    # batch_size 4096 * 32 	best num batches ~ 50, best result -> 74.93%
 
     for var in variations:
         grid = base_params.copy()

@@ -5,3 +5,4 @@ class TaskType(Enum):
     ENTER = 0
     PICKUP = 1
     LEAVE = 2
+    MOVE = 3
