@@ -25,7 +25,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     model_classes = [MLP, CNN]
     models_settings = []
     eval_robot_list = [n for n in range(10, 101, 5)]
-    train_workers = 4
+    train_workers = 3
 
     base_params = {
         "grid_size": [(20, 20)],
@@ -34,52 +34,100 @@ def run_experiments(force_train: bool = True, eval: bool = True):
         "device": [device],
         "model_class": [MLP],
         "hidden_layers": [{"mlp_layers": [512]}],
-        "view_size": [7],
+        "view_size": [11],
         "buffer_length": [1_000_000],
         "num_robots": [60],
         "target_update_interval": [60],
         "suffix": ["sample1"],
         "batch_size": [4096 * 6],
         "num_batches": [45],
+        "num_episodes": [1000],
     }
     variations = [
         {
-            "num_batches": [30, 35, 40],
-            "suffix": ["longer1", "longer2", "longer3"],
-            "num_episodes": [1500],
-        },
-        {
-            "batch_size": [4096 * 8],
-            "num_batches": [50],
-            "suffix": ["longer1", "longer2", "longer3", "longer4", "longer5"],
-            "num_episodes": [1500],
+            "model_class": [MLP],
+            "hidden_layers": [
+                {"mlp_layers": [256]},
+            ],
+            "batch_size": [4096 * 2, 4096 * 4],
+            "num_batches": [50, 60],
+            "view_size": [7],
+            "suffix": ["sample1"],
+            "num_episodes": [1000],
         },
         {
             "model_class": [MLP],
             "hidden_layers": [
-                {"mlp_layers": [128]},
-                {"mlp_layers": [256]},
                 {"mlp_layers": [512]},
                 {"mlp_layers": [1024]},
-                {"mlp_layers": [128, 64]},
-                {"mlp_layers": [256, 128]},
-                {"mlp_layers": [512, 256]},
+                {"mlp_layers": [2048]},
             ],
-            "view_size": [7, 9, 11],
-            "suffix": ["longer1"],
-            "num_episodes": [1500],
+            "batch_size": [4096 * 6],
+            "num_batches": [45],
+            "view_size": [7, 9, 11, 13],
+            "suffix": ["sample1"],
+            "num_episodes": [1000],
         },
+        # With padding
         {
+            "num_episodes": [1000],
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [16]},
-                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [32]},
-                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [64]},
-                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [128]},
-                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [256]},
-                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [512]},
+                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [512]},
+                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [1024]},
             ],
-            "view_size": [7],
+            "suffix": ["sample1"],
+        },
+        {
+            "num_episodes": [1000],
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(5, 32, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(5, 32, 1)], "mlp_layers": [512]},
+                {"cnn_layers": [(5, 32, 1)], "mlp_layers": [1024]},
+            ],
+            "suffix": ["sample1"],
+        },
+        {
+            "num_episodes": [1000],
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(3, 32, 1), (3, 32, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 32, 1), (3, 32, 1)], "mlp_layers": [512]},
+                {"cnn_layers": [(3, 32, 1), (3, 32, 1)], "mlp_layers": [1024]},
+            ],
+            "suffix": ["sample1"],
+        },
+        # Without padding
+        {
+            "num_episodes": [1000],
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(3, 32, 0)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 32, 0)], "mlp_layers": [512]},
+                {"cnn_layers": [(3, 32, 0)], "mlp_layers": [1024]},
+            ],
+            "suffix": ["sample1"],
+        },
+        {
+            "num_episodes": [1000],
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(5, 32, 0)], "mlp_layers": [256]},
+                {"cnn_layers": [(5, 32, 0)], "mlp_layers": [512]},
+                {"cnn_layers": [(5, 32, 0)], "mlp_layers": [1024]},
+            ],
+            "suffix": ["sample1"],
+        },
+        {
+            "num_episodes": [1000],
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(3, 32, 0), (3, 32, 0)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 32, 0), (3, 32, 0)], "mlp_layers": [512]},
+                {"cnn_layers": [(3, 32, 0), (3, 32, 0)], "mlp_layers": [1024]},
+            ],
             "suffix": ["sample1"],
         },
     ]
@@ -119,7 +167,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             model_configs=model_configs,
             eval_robot_list=eval_robot_list,
             num_simulations=50,
-            num_processes=3,
+            num_processes=4,
         )
 
 

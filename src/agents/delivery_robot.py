@@ -54,7 +54,7 @@ class DeliveryRobot:
         """
         Returns True if robot should be removed
         """
-        print("debug", self.id, self.pos, self.task_type, self.goal_pos, self.busy_time)
+        # print("debug", self.id, self.pos, self.task_type, self.goal_pos, self.busy_time)
         if self.goal_pos is None and not self.task.is_completed():
             self.goal_pos, self.task_type = self.task.pop_next()
 
@@ -69,16 +69,16 @@ class DeliveryRobot:
 
         # leave if on depot
         if self.task_type == TaskType.LEAVE and self.pos == self.out_depot.pos:
-            print(
-                "debug1",
-                self._get_exit_wait_length(),
-                self.action_times[TaskType.LEAVE],
-                self.pos,
-            )
+            # print(
+            #     "debug1",
+            #     self._get_exit_wait_length(),
+            #     self.action_times[TaskType.LEAVE],
+            #     self.pos,
+            # )
             if self._get_exit_wait_length() == self.action_times[TaskType.LEAVE] - 1:
                 self.pos_history.append(self.pos)
                 self.in_depot.finished_tasks.append(self.task)
-                print("SETTING TASK AS DONE, robotID:", self.id, self.pos)
+                # print("SETTING TASK AS DONE, robotID:", self.id, self.pos)
                 self.should_exit = True
             else:
                 self.pos_history.append(self.pos)

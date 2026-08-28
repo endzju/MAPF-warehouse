@@ -118,6 +118,8 @@ def read_model_data(
         / model_config.get_model_dir_name()
         / f"{model_config.get_params_string()}.json"
     )
+    if not data_path.exists():
+        return None
     with open(data_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -175,11 +177,11 @@ def plot_delivery_efficiency(
 
 
 def plot_delivery_throughput(
-    models: list[nn.Module],
+    model_configs: list[nn.Module],
     x_ticks: list[str | int],
 ):
     x_ticks_set = {str(tick) for tick in x_ticks}
-    data = read_models_data(models)
+    data = read_models_data(model_configs=model_configs)
     plt.figure(figsize=(10, 6))
     for i, (model_name, evaluation) in enumerate(data.items()):
         evaluation = {k: v for k, v in evaluation.items() if k in x_ticks_set}
