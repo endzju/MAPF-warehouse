@@ -41,107 +41,83 @@ def run_experiments(force_train: bool = True, eval: bool = True):
         "suffix": ["sample1"],
         "batch_size": [4096 * 6],
         "num_batches": [45],
-        "num_episodes": [1000],
+        "num_episodes": [1200],
     }
     variations = [
-        {
-            "model_class": [MLP],
-            "hidden_layers": [
-                {"mlp_layers": [256]},
-            ],
-            "batch_size": [4096 * 2, 4096 * 4],
-            "num_batches": [50, 60],
-            "view_size": [7],
-            "suffix": ["sample1"],
-            "num_episodes": [1000],
-        },
-        {
-            "model_class": [MLP],
-            "hidden_layers": [
-                {"mlp_layers": [512]},
-                {"mlp_layers": [1024]},
-                {"mlp_layers": [2048]},
-            ],
-            "batch_size": [4096 * 6],
-            "num_batches": [45],
-            "view_size": [7, 9, 11, 13],
-            "suffix": ["sample1"],
-            "num_episodes": [1000],
-        },
         # With padding
         {
-            "num_episodes": [1000],
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [256]},
                 {"cnn_layers": [(3, 32, 1)], "mlp_layers": [512]},
-                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [1024]},
             ],
+            "num_batches": [28, 29, 33, 36, 39, 42],
+            "batch_size": [4096],
             "suffix": ["sample1"],
         },
         {
-            "num_episodes": [1000],
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(5, 32, 1)], "mlp_layers": [256]},
-                {"cnn_layers": [(5, 32, 1)], "mlp_layers": [512]},
-                {"cnn_layers": [(5, 32, 1)], "mlp_layers": [1024]},
+                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [512]},
             ],
+            "num_batches": [24, 25, 26, 27, 28],
+            "batch_size": [4096 * 2],
             "suffix": ["sample1"],
         },
         {
-            "num_episodes": [1000],
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(3, 32, 1), (3, 32, 1)], "mlp_layers": [256]},
-                {"cnn_layers": [(3, 32, 1), (3, 32, 1)], "mlp_layers": [512]},
-                {"cnn_layers": [(3, 32, 1), (3, 32, 1)], "mlp_layers": [1024]},
+                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [512]},
             ],
+            "num_batches": [30, 34, 38, 42],
+            "batch_size": [4096 * 4],
             "suffix": ["sample1"],
         },
-        # Without padding
+        # guesses with lower target_update_interval
         {
-            "num_episodes": [1000],
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(3, 32, 0)], "mlp_layers": [256]},
-                {"cnn_layers": [(3, 32, 0)], "mlp_layers": [512]},
-                {"cnn_layers": [(3, 32, 0)], "mlp_layers": [1024]},
+                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [512]},
             ],
+            "num_batches": [30],
+            "batch_size": [4096 * 2],
             "suffix": ["sample1"],
-        },
-        {
-            "num_episodes": [1000],
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(5, 32, 0)], "mlp_layers": [256]},
-                {"cnn_layers": [(5, 32, 0)], "mlp_layers": [512]},
-                {"cnn_layers": [(5, 32, 0)], "mlp_layers": [1024]},
-            ],
-            "suffix": ["sample1"],
-        },
-        {
-            "num_episodes": [1000],
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 32, 0), (3, 32, 0)], "mlp_layers": [256]},
-                {"cnn_layers": [(3, 32, 0), (3, 32, 0)], "mlp_layers": [512]},
-                {"cnn_layers": [(3, 32, 0), (3, 32, 0)], "mlp_layers": [1024]},
-            ],
-            "suffix": ["sample1"],
+            "target_update_interval": [20, 40],
         },
     ]
 
+    # MLP 512 neurons
     # batch_size 512    	brak widocznego maksymalnego wyniku
     # batch_size 1024   	brak widocznego maksymalnego wyniku
     # batch_size 2048 		best num batches ~ 150, best result -> 73.8%
     # batch_size 4096 		best num batches ~ 104, best result -> 74.5$
     # batch_size 4096 * 2 	best num batches ~ 75, best result -> 74.71%
     # batch_size 4096 * 4 	best num batches ~ 65, best result -> 74.95%
-    # batch_size 4096 * 6	best num batches ~ 45, best result -> 74.9%, very stable
+    # batch_size 4096 * 6	best num batches ~ 45, best result -> 74.90%, very stable
     # batch_size 4096 * 8 	best num batches ~ 50, best result -> 75.15%
     # batch_size 4096 * 16 	best num batches ~ 45, best result -> 74.89%
     # batch_size 4096 * 32 	best num batches ~ 50, best result -> 74.93%
+
+    # CNN k3c64p1
+    # batch_size 1024   	best num batches ~ 30, best result -> 49.12%
+    # batch_size 2048 		best num batches ~ 30, best result -> 58.70%
+    # batch_size 4096 		best num batches ~ 40 or 90, best result -> 65.10%, quite stable
+    # batch_size 4096 * 2 	best num batches ~ 20-30, best result -> ?
+    # batch_size 4096 * 4 	best num batches ~ 30, best result -> 63.53%, stable
+    # batch_size 4096 * 8 	best num batches ~ 20-30, best result -> ?
+
+    # CNN k3c64p0
+    # batch_size 1024   	best num batches ~ 30, best result -> 56.02%
+    # batch_size 2048 		best num batches ~ 30, best result -> 60.64%
+    # batch_size 4096 		best num batches ~ 30, best result -> 63.22%
+    # batch_size 4096 * 2 	best num batches ~ 30, best result -> 65.26%, very stable
+    # batch_size 4096 * 4 	best num batches ~ 20, best result -> 61.74%, unstable
+
+    # CNN k3c32p1
+
+    # CNN k3c32p0
+    # batch_size 4096   	best num batches ~ +-30, best result -> 64.36%, needs more training
+    # batch_size 4096 * 2 	best num batches ~ 22-26, best result -> 63.63%, a bit unstable
+    # batch_size 4096 * 4 	best num batches ~ +-30, best result -> 65.81%, stable
 
     for var in variations:
         grid = base_params.copy()
