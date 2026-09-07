@@ -1,3 +1,6 @@
+# folders/files in project
+src/neural_networks/models
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
