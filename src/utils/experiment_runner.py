@@ -25,7 +25,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     model_classes = [MLP, CNN]
     models_settings = []
     eval_robot_list = [n for n in range(10, 101, 5)]
-    train_workers = 3
+    train_workers = 4
 
     base_params = {
         "grid_size": [(20, 20)],
@@ -35,7 +35,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
         "model_class": [MLP],
         "hidden_layers": [{"mlp_layers": [512]}],
         "view_size": [11],
-        "buffer_length": [1_000_000],
+        "buffer_length": [500_000],
         "num_robots": [60],
         "target_update_interval": [60],
         "suffix": ["sample1"],
@@ -48,174 +48,115 @@ def run_experiments(force_train: bool = True, eval: bool = True):
         {
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [512]},
-            ],
-            "num_batches": [28, 29, 33, 36, 39, 42],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [512]},
-            ],
-            "num_batches": [24, 25, 26, 27, 28],
-            "batch_size": [4096 * 2],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [512]},
-            ],
-            "num_batches": [30, 34, 38, 42],
-            "batch_size": [4096 * 4],
-            "suffix": ["sample1"],
-        },
-        # without padding
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 32, 0)], "mlp_layers": [512]},
-            ],
-            "num_batches": [24, 25, 26, 27, 28],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 32, 0)], "mlp_layers": [512]},
-            ],
-            "num_batches": [24, 25, 26, 27, 28],
-            "batch_size": [4096 * 2],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 32, 0)], "mlp_layers": [512]},
-            ],
-            "num_batches": [20, 21, 22, 23, 24],
-            "batch_size": [4096 * 4],
-            "suffix": ["sample1"],
-        },
-        # guesses with lower target_update_interval
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [512]},
-            ],
-            "num_batches": [30],
-            "batch_size": [4096 * 4],
-            "suffix": ["sample1"],
-            "target_update_interval": [20, 40],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [256]},
-            ],
-            "num_batches": [30],
-            "batch_size": [4096 * 4],
-            "suffix": ["sample1"],
-            "target_update_interval": [20, 40],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [128]},
-            ],
-            "num_batches": [30],
-            "batch_size": [4096 * 4],
-            "suffix": ["sample1"],
-            "target_update_interval": [20, 40],
-        },
-        # now for k3c32p0
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 32, 0)], "mlp_layers": [512]},
-            ],
-            "num_batches": [22],
-            "batch_size": [4096 * 4],
-            "suffix": ["sample1"],
-            "target_update_interval": [20, 40],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 32, 0)], "mlp_layers": [256]},
-            ],
-            "num_batches": [22],
-            "batch_size": [4096 * 4],
-            "suffix": ["sample1"],
-            "target_update_interval": [20, 40],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 32, 0)], "mlp_layers": [128]},
-            ],
-            "num_batches": [22],
-            "batch_size": [4096 * 4],
-            "suffix": ["sample1"],
-            "target_update_interval": [20, 40],
-        },
-        # lower chanel number
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
                 {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
             ],
-            "num_batches": [10, 20, 30, 40, 50],
+            "num_batches": [26, 28, 30, 32, 34],
             "batch_size": [4096],
             "suffix": ["sample1"],
         },
         {
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(5, 16, 2)], "mlp_layers": [256]},
             ],
-            "num_batches": [10, 20, 30, 40, 50],
-            "batch_size": [4096 * 2],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
-            ],
-            "num_batches": [10, 20, 30, 40, 50],
-            "batch_size": [4096 * 4],
-            "suffix": ["sample1"],
-        },
-        # without padding
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 16, 0)], "mlp_layers": [256]},
-            ],
-            "num_batches": [10, 20, 30, 40, 50],
+            "num_batches": [20, 30, 40, 50],
             "batch_size": [4096],
             "suffix": ["sample1"],
         },
         {
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(3, 16, 0)], "mlp_layers": [256]},
+                {"cnn_layers": [(5, 16, 1)], "mlp_layers": [256]},
             ],
-            "num_batches": [10, 20, 30, 40, 50],
-            "batch_size": [4096 * 2],
+            "num_batches": [20, 30, 40, 50],
+            "batch_size": [4096],
             "suffix": ["sample1"],
         },
         {
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(3, 16, 0)], "mlp_layers": [256]},
+                {"cnn_layers": [(5, 16, 0)], "mlp_layers": [256]},
             ],
-            "num_batches": [10, 20, 30, 40, 50],
-            "batch_size": [4096 * 4],
+            "num_batches": [20, 30, 40, 50],
+            "batch_size": [4096],
+            "suffix": ["sample1"],
+        },
+        {
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(7, 16, 3)], "mlp_layers": [256]},
+            ],
+            "num_batches": [20, 30, 40, 50],
+            "batch_size": [4096],
+            "suffix": ["sample1"],
+        },
+        {
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(7, 16, 2)], "mlp_layers": [256]},
+            ],
+            "num_batches": [20, 30, 40, 50],
+            "batch_size": [4096],
+            "suffix": ["sample1"],
+        },
+        {
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(7, 16, 1)], "mlp_layers": [256]},
+            ],
+            "num_batches": [20, 30, 40, 50],
+            "batch_size": [4096],
+            "suffix": ["sample1"],
+        },
+        {
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(7, 16, 0)], "mlp_layers": [256]},
+            ],
+            "num_batches": [20, 30, 40, 50],
+            "batch_size": [4096],
+            "suffix": ["sample1"],
+        },
+        {
+            "model_class": [CNN],
+            "hidden_layers": [
+                {
+                    "cnn_layers": [(3, 8, 1), (3, 16, 1), (3, 16, 1)],
+                    "mlp_layers": [256],
+                },
+            ],
+            "num_batches": [30],
+            "batch_size": [4096],
+            "suffix": ["sample1"],
+        },
+        {
+            "model_class": [CNN],
+            "hidden_layers": [
+                {
+                    "cnn_layers": [(3, 8, 1), (3, 16, 1), (3, 16, 1), (3, 16, 1)],
+                    "mlp_layers": [256],
+                },
+            ],
+            "num_batches": [30],
+            "batch_size": [4096],
+            "suffix": ["sample1"],
+        },
+        {
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(3, 8, 1), (3, 16, 1)], "mlp_layers": [256]},
+            ],
+            "num_batches": [30],
+            "batch_size": [4096],
+            "suffix": ["sample1"],
+        },
+        {
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(3, 8, 0), (3, 16, 0)], "mlp_layers": [256]},
+            ],
+            "num_batches": [30],
+            "batch_size": [4096],
             "suffix": ["sample1"],
         },
     ]

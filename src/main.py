@@ -63,7 +63,7 @@ if __name__ == "__main__":
     config_params = {
         "grid_size": (20, 20),
         "step_limit": 5000,
-        "task_length": 1,
+        "task_length": 5,
         "device": torch.device("cpu"),
         "model_class": MLP,
         "hidden_layers": {"mlp_layers": [512]},
@@ -72,12 +72,12 @@ if __name__ == "__main__":
         "suffix": "sample1",
         "batch_size": 4096 * 8,
         "num_batches": 50,
-        "num_tasks": 300,
+        "num_tasks": 3000,
     }
     model_config = ModelConfig(**config_params)
     model = model_config.load_model().to("cpu")
 
-    model_config.num_robots = 20
+    model_config.num_robots = 60
 
     manhattan_delivery_times = []
     delivery_times = []
