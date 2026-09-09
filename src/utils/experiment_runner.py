@@ -25,7 +25,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     model_classes = [MLP, CNN]
     models_settings = []
     eval_robot_list = [n for n in range(10, 101, 5)]
-    train_workers = 4
+    train_workers = 2
 
     base_params = {
         "grid_size": [(20, 20)],
@@ -48,114 +48,63 @@ def run_experiments(force_train: bool = True, eval: bool = True):
         {
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(9, 16, 0)], "mlp_layers": [256]},
             ],
-            "num_batches": [26, 28, 30, 32, 34],
+            "num_batches": [30, 40, 50, 60],
             "batch_size": [4096],
             "suffix": ["sample1"],
         },
         {
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(5, 16, 2)], "mlp_layers": [256]},
+                {"cnn_layers": [(9, 16, 1)], "mlp_layers": [256]},
             ],
-            "num_batches": [20, 30, 40, 50],
+            "num_batches": [30, 40, 50, 60],
             "batch_size": [4096],
             "suffix": ["sample1"],
         },
         {
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(5, 16, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(9, 16, 2)], "mlp_layers": [256]},
             ],
-            "num_batches": [20, 30, 40, 50],
+            "num_batches": [30, 40, 50, 60],
             "batch_size": [4096],
             "suffix": ["sample1"],
         },
         {
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(5, 16, 0)], "mlp_layers": [256]},
+                {"cnn_layers": [(11, 16, 0)], "mlp_layers": [256]},
             ],
-            "num_batches": [20, 30, 40, 50],
+            "num_batches": [30, 40, 50, 60],
             "batch_size": [4096],
             "suffix": ["sample1"],
         },
         {
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(7, 16, 3)], "mlp_layers": [256]},
+                {"cnn_layers": [(5, 16, 0), (5, 16, 0)], "mlp_layers": [256]},
             ],
-            "num_batches": [20, 30, 40, 50],
+            "num_batches": [30, 40, 50, 60],
             "batch_size": [4096],
             "suffix": ["sample1"],
         },
         {
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(7, 16, 2)], "mlp_layers": [256]},
+                {"cnn_layers": [(5, 16, 0), (3, 16, 0)], "mlp_layers": [256]},
             ],
-            "num_batches": [20, 30, 40, 50],
+            "num_batches": [30, 40, 50, 60],
             "batch_size": [4096],
             "suffix": ["sample1"],
         },
         {
             "model_class": [CNN],
             "hidden_layers": [
-                {"cnn_layers": [(7, 16, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(7, 16, 0), (3, 16, 0)], "mlp_layers": [256]},
             ],
-            "num_batches": [20, 30, 40, 50],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(7, 16, 0)], "mlp_layers": [256]},
-            ],
-            "num_batches": [20, 30, 40, 50],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {
-                    "cnn_layers": [(3, 8, 1), (3, 16, 1), (3, 16, 1)],
-                    "mlp_layers": [256],
-                },
-            ],
-            "num_batches": [30],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {
-                    "cnn_layers": [(3, 8, 1), (3, 16, 1), (3, 16, 1), (3, 16, 1)],
-                    "mlp_layers": [256],
-                },
-            ],
-            "num_batches": [30],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 8, 1), (3, 16, 1)], "mlp_layers": [256]},
-            ],
-            "num_batches": [30],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 8, 0), (3, 16, 0)], "mlp_layers": [256]},
-            ],
-            "num_batches": [30],
+            "num_batches": [30, 40, 50, 60],
             "batch_size": [4096],
             "suffix": ["sample1"],
         },
