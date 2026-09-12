@@ -25,11 +25,11 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     model_classes = [MLP, CNN]
     models_settings = []
     eval_robot_list = [n for n in range(10, 101, 5)]
-    train_workers = 2
+    train_workers = 1
 
     base_params = {
         "grid_size": [(20, 20)],
-        "step_limit": [1000],
+        "step_limit": [1500],
         "task_length": [5],
         "device": [device],
         "model_class": [MLP],
@@ -49,167 +49,209 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             "hidden_layers": [
                 {"mlp_layers": [512]},
             ],
-            "view_size": [11],
-            "num_batches": [40, 45, 50, 55],
+            "view_size": [5, 7, 9, 11],
+            "num_batches": [50],
             "batch_size": [4096 * 8],
             "num_episodes": [2000],
-            "suffix": ["longer1"],
+            "suffix": ["longer7"],
+            "buffer_length": [1_000_000],
         },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(7, 16, 1), (5, 32, 0)], "mlp_layers": [256]},
-            ],
-            "num_batches": [10, 20, 30, 40, 50, 60],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(7, 16, 1), (3, 32, 0)], "mlp_layers": [256]},
-            ],
-            "num_batches": [10, 20, 30, 40, 50, 60],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(9, 16, 1), (3, 32, 0)], "mlp_layers": [256]},
-            ],
-            "num_batches": [10, 20, 30, 40, 50, 60],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(9, 16, 0)], "mlp_layers": [256]},
-            ],
-            "num_batches": [30, 40, 50, 60, 26, 22, 18, 14, 10],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(9, 16, 1)], "mlp_layers": [256]},
-            ],
-            "num_batches": [30, 40, 50, 60, 70, 80, 90],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(9, 16, 1)], "mlp_layers": [256]},
-            ],
-            "num_batches": [60],
-            "batch_size": [4096],
-            "num_episodes": [2000],
-            "suffix": ["longer1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(9, 16, 2)], "mlp_layers": [256]},
-            ],
-            "num_batches": [30, 40, 50, 60],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(11, 16, 0)], "mlp_layers": [256]},
-            ],
-            "num_batches": [50, 60, 70, 80],
-            "batch_size": [4096],
-            "num_episodes": [2000],
-            "suffix": ["longer1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(11, 16, 0)], "mlp_layers": [256]},
-            ],
-            "num_batches": [60, 70, 80],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(11, 16, 1)], "mlp_layers": [256]},
-            ],
-            "num_batches": [30, 40, 50, 60],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(11, 16, 2)], "mlp_layers": [256]},
-            ],
-            "num_batches": [30, 40, 50, 60],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(11, 16, 3)], "mlp_layers": [256]},
-            ],
-            "num_batches": [30, 40, 50, 60],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(11, 16, 3), (3, 16, 3)], "mlp_layers": [256]},
-            ],
-            "num_batches": [30, 40, 50, 60],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(11, 16, 5), (3, 16, 3)], "mlp_layers": [256]},
-            ],
-            "num_batches": [30, 40, 50, 60],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(5, 16, 0), (5, 16, 0)], "mlp_layers": [256]},
-            ],
-            "num_batches": [10, 20, 30, 40, 50, 60],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(5, 16, 0), (3, 16, 0)], "mlp_layers": [256]},
-            ],
-            "num_batches": [30, 40, 50, 60],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(7, 16, 0), (3, 16, 0)], "mlp_layers": [256]},
-            ],
-            "num_batches": [10, 20, 30, 40, 50, 60],
-            "batch_size": [4096],
-            "suffix": ["sample1"],
-        },
+        # {
+        #     "model_class": [MLP],
+        #     "hidden_layers": [
+        #         {"mlp_layers": [512]},
+        #     ],
+        #     "view_size": [9, 11],
+        #     "num_batches": [20, 30, 40, 50],
+        #     "batch_size": [4096 * 6],
+        #     "num_episodes": [2000],
+        #     "suffix": ["longer6"],
+        #     "buffer_length": [1_000_000],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(7, 16, 1), (5, 32, 0)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [10, 20, 30, 40, 50, 60],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(7, 16, 1), (3, 32, 0)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [10, 20, 30, 40, 50, 60],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(9, 16, 1), (3, 32, 0)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [20],
+        #     "batch_size": [4096],
+        #     "num_episodes": [2500],
+        #     "suffix": ["longer1", "longer2", "longer3"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(9, 16, 1), (3, 32, 0)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [70, 80, 90, 100],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(9, 16, 0)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [30, 40, 50, 60, 26, 22, 18, 14, 10],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(9, 16, 1)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [30, 40, 50, 60, 70, 80, 90],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(9, 16, 1)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [60],
+        #     "batch_size": [4096],
+        #     "num_episodes": [2000],
+        #     "suffix": ["longer1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(9, 16, 2)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [30, 40, 50, 60, 70, 80, 90],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(11, 16, 0)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [50, 60, 70, 80],
+        #     "batch_size": [4096],
+        #     "num_episodes": [2000],
+        #     "suffix": ["longer1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(11, 16, 0)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [35, 45, 55, 60, 70, 80],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(11, 16, 1)], "mlp_layers": [256]},
+        #         {"cnn_layers": [(11, 32, 1)], "mlp_layers": [256]},
+        #         {"cnn_layers": [(11, 64, 1)], "mlp_layers": [256]},
+        #         {"cnn_layers": [(11, 16, 1)], "mlp_layers": [128]},
+        #         {"cnn_layers": [(11, 32, 1)], "mlp_layers": [128]},
+        #         {"cnn_layers": [(11, 64, 1)], "mlp_layers": [128]},
+        #         {"cnn_layers": [(11, 16, 1)], "mlp_layers": [512]},
+        #         {"cnn_layers": [(11, 32, 1)], "mlp_layers": [512]},
+        #         {"cnn_layers": [(11, 64, 1)], "mlp_layers": [512]},
+        #     ],
+        #     "num_batches": [60],
+        #     "batch_size": [4096],
+        #     "num_episodes": [2000],
+        #     "suffix": ["longer1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(11, 16, 2)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [30, 40, 50, 60],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(11, 16, 3)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [30, 40, 50, 60],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(11, 16, 3)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [35, 40, 45],
+        #     "batch_size": [4096],
+        #     "num_episodes": [2500],
+        #     "suffix": ["longer1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(11, 16, 3), (3, 16, 3)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [30, 40, 50, 60],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(11, 16, 5), (3, 16, 3)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [30, 40, 50, 60],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(5, 16, 0), (5, 16, 0)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [10, 20, 30, 40, 50, 60],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(5, 16, 0), (3, 16, 0)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [30, 40, 50, 60],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(7, 16, 0), (3, 16, 0)], "mlp_layers": [256]},
+        #     ],
+        #     "num_batches": [10, 20, 30, 40, 50, 60],
+        #     "batch_size": [4096],
+        #     "suffix": ["sample1"],
+        # },
     ]
 
     # MLP 512 neurons

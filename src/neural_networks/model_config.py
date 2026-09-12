@@ -99,6 +99,7 @@ class ModelConfig:
         parts.append(f"s{self.batch_size}")
         parts.append(f"b{self.num_batches}")
         parts.append(f"g{self.gamma:.3f}".replace(".", ""))
+        parts.append(f"t{self.step_limit}")
 
         obs_parts = []
         if not getattr(self, "float_goal_vector", True):
