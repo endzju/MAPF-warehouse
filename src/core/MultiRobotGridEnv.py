@@ -26,16 +26,11 @@ import pygame
 class MultiRobotGridEnv(gym.Env):
     def __init__(
         self,
-        grid_size: tuple[int, int] = (20, 20),
-        agent_view_size: int = 5,
-        obstacles: set[tuple[int, int]] | None = None,
-        input_depots: list[Depot] | None = None,
-        output_depots: list[Depot] | None = None,
-        step_limit: int = 100,
-        task_length: int = 5,
-        action_times: dict[TaskType, int] | None = None,
-        tasks: list[Task] | None = None,
-        num_tasks: int = 100,
+        grid_size: tuple[int, int],
+        agent_view_size: int,
+        step_limit: int,
+        task_length: int,
+        num_tasks: int,
         max_robots: int = 100,
         modulo_reward_x: tuple[int] = (),
         modulo_reward_y: tuple[int] = (),
@@ -46,6 +41,11 @@ class MultiRobotGridEnv(gym.Env):
         n_actions: int = 5,
         x_position_float: bool = False,
         y_position_float: bool = False,
+        input_depots: list[Depot] | None = None,
+        output_depots: list[Depot] | None = None,
+        action_times: dict[TaskType, int] | None = None,
+        tasks: list[Task] | None = None,
+        obstacles: set[tuple[int, int]] | None = None,
         task_tsp: bool = False,
     ):
         super().__init__()
@@ -392,7 +392,6 @@ class MultiRobotGridEnv(gym.Env):
                 blocked.add(next_pos)
             else:
                 rewards[agent.id] = self.reward(agent, next_pos, previous_blocked)
-
         for agent in agent_list:
             agent.step()
 
