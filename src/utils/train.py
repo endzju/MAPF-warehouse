@@ -200,7 +200,9 @@ def train(
             actions = agent_brain.get_actions(obs_dict=obs, device="cpu")
             action_time += time.time() - action_tic
             step_tic = time.time()
-            next_obs, rewards, terminated, truncated, _ = env.step(actions)
+            next_obs, rewards, terminated, truncated, additional_info = env.step(
+                actions
+            )
             env_step_time += time.time() - step_tic
             done = terminated or truncated
             if done:
@@ -219,15 +221,21 @@ def train(
 
             memory_push_tic = time.time()
             for agent_id in obs:
-                if agent_id in next_obs and agent_id in rewards:
-                    if rewards[agent_id] > 50:
-                        print(rewards[agent_id])
+                if agent_id in next_obs:
                     memory.push(
                         obs[agent_id],
                         actions[agent_id],
                         rewards[agent_id],
                         next_obs[agent_id],
                         done,
+                    )
+                elif agent_id in additional_info["tasks_done"]:
+                    memory.push(
+                        obs[agent_id],
+                        actions[agent_id],
+                        rewards[agent_id],
+                        env._get_obs(dummy=True),
+                        True,
                     )
             memory_push_time += time.time() - memory_push_tic
             obs = next_obs

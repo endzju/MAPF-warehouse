@@ -4,7 +4,6 @@ from itertools import islice
 # if TYPE_CHECKING:
 from src.models.depot import Depot
 from src.models.task import Task
-from src.utils.distance import manhattan_distance
 from src.utils.enums import TaskType
 
 
@@ -56,7 +55,7 @@ class DeliveryRobot:
 
     def step(self):
         """
-        Returns True if robot should be removed
+        Returns True if finished goal
         """
         self.step_count += 1
 
@@ -64,7 +63,7 @@ class DeliveryRobot:
         if self.busy_time > 0:
             self.busy_time = max(0, self.busy_time - 1)
             self.pos_history.append(self.pos)
-            return
+            return False
 
         self.move_count += 1
 
@@ -72,11 +71,14 @@ class DeliveryRobot:
         self.move()
 
         # finish task and set idle time
+        finished_goal = False
+
         if self.pos == self.goal_pos:
+            finished_goal = True
             self.finish_goal()
             self._next_task()
 
-        return
+        return finished_goal
 
     def move(self):
         if self.next_pos is None:
@@ -91,17 +93,13 @@ class DeliveryRobot:
     def finish_goal(self):
         self.busy_time = self.action_times[self.task_type]
         if self.task_type == TaskType.LEAVE:
+            self.in_depot.finished_tasks.append(self.task)
             self.should_exit = True
         self.allow_next_observation = True
 
-    def is_stuck(self) -> bool:
-        if (
-            self.pos == self.goal_pos
-            or manhattan_distance(self.pos, self.in_depot.pos) < 3
-            or manhattan_distance(self.pos, self.out_depot.pos) < 3
-        ):
+    def is_stuck(self, stuck_time=0) -> bool:
+        if stuck_time == 0:
             return False
-        stuck_time = 5
         if len(self.pos_history) < stuck_time:
             return False
         recent_positions = islice(reversed(self.pos_history), stuck_time)
@@ -151,9 +149,6 @@ class DeliveryRobot:
         return self.should_exit and not self.is_busy()
 
     def should_generate_observation(self) -> bool:
-        if self.allow_next_observation:
-            self.allow_next_observation = False
-            return True
         return not self.is_busy()
 
     def _next_task(self) -> None:

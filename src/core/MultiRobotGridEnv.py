@@ -47,6 +47,7 @@ class MultiRobotGridEnv(gym.Env):
         tasks: list[Task] | None = None,
         obstacles: set[tuple[int, int]] | None = None,
         task_tsp: bool = False,
+        stuck_time: int = 0,
     ):
         super().__init__()
         self.grid_width, self.grid_height = grid_size
@@ -77,6 +78,7 @@ class MultiRobotGridEnv(gym.Env):
         self.x_position_float = x_position_float
         self.y_position_float = y_position_float
         self.task_tsp = task_tsp
+        self.stuck_time = stuck_time
         self.depot_priority = 0
         self.deleted_agents = []
 
@@ -365,6 +367,7 @@ class MultiRobotGridEnv(gym.Env):
 
     def _step_agents(self, actions, previous_blocked) -> dict[int, float]:
         rewards = {}
+        additional_info = {"tasks_done": {}}
 
         blocked = set(previous_blocked)
 
@@ -374,9 +377,9 @@ class MultiRobotGridEnv(gym.Env):
         for agent in agent_list:
             if agent.is_busy():
                 continue
-            action = actions.get(agent.id, 4)  # 4 = wait
+            action = actions.get(agent.id, 4)  # 4 -> default is wait
 
-            if agent.is_stuck():
+            if self.unstuck_ticks and agent.is_stuck(stuck_ticks=self.stuck_time):
                 rewards[agent.id] = 0
                 random_move = random.randrange(self.n_actions)
                 next_pos = self._next_pos(agent, random_move)
@@ -393,9 +396,9 @@ class MultiRobotGridEnv(gym.Env):
             else:
                 rewards[agent.id] = self.reward(agent, next_pos, previous_blocked)
         for agent in agent_list:
-            agent.step()
+            additional_info["tasks_done"][agent.id] = agent.step()
 
-        return rewards
+        return rewards, additional_info
 
     def _collect_ready_robots(self):
         remove_agents = set()
@@ -459,20 +462,25 @@ class MultiRobotGridEnv(gym.Env):
         return observations
 
     def step(self, actions: dict[int, int]):
+        additional_info = {}
         self._collect_ready_robots()  # We need to do this before the agents move
         previous_blocked = self._obstacle_cells_cache | self.get_agent_positions(
             include_next_pos=True
         )
         self._deploy_robots(previous_blocked=previous_blocked)
-        rewards = self._step_agents(actions=actions, previous_blocked=previous_blocked)
+        rewards, step_info = self._step_agents(
+            actions=actions, previous_blocked=previous_blocked
+        )
+
         new_observations = self._get_observations()
 
         self.step_count += 1
 
         truncated = self.step_count >= self.step_limit
         terminated = self._all_tasks_completed()
+        additional_info.update(step_info)
 
-        return new_observations, rewards, terminated, truncated, {}
+        return new_observations, rewards, terminated, truncated, additional_info
 
     def _goal_vector(self, agent: DeliveryRobot) -> np.ndarray:
         if agent.goal_pos is None:
@@ -518,16 +526,21 @@ class MultiRobotGridEnv(gym.Env):
 
     def _get_obs(
         self,
-        agent: DeliveryRobot,
-        view_grids: np.ndarray,
+        agent: DeliveryRobot = None,
+        view_grids: np.ndarray = None,
+        dummy: bool = False,
     ) -> dict[str, np.ndarray]:
         view = np.zeros(
             (self.view_dims, self.agent_view_size, self.agent_view_size), dtype=np.uint8
         )
+        additional_input = np.zeros(self.additional_input_size, dtype=np.float32)
         # chanel 0: obstacle grid
         # chanel 1: other agents
         # chanel 2: other agents' goals
         # chanel 3: own goal
+
+        if dummy:
+            return {"view": view, "additional_input": additional_input}
 
         radius = self.view_radius
         window = self.view_window
@@ -545,7 +558,6 @@ class MultiRobotGridEnv(gym.Env):
             view[2, gdy + radius, gdx + radius] = 0
             view[3, gdy + radius, gdx + radius] = 1
 
-        additional_input = np.zeros(self.additional_input_size, dtype=np.float32)
         goal_vec_size = self.goal_vec_size
         additional_input[:goal_vec_size] = self._goal_vector(agent=agent)
         cur_additional_input_size = goal_vec_size
