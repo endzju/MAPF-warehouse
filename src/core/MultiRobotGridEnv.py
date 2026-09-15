@@ -379,7 +379,7 @@ class MultiRobotGridEnv(gym.Env):
                 continue
             action = actions.get(agent.id, 4)  # 4 -> default is wait
 
-            if self.unstuck_ticks and agent.is_stuck(stuck_ticks=self.stuck_time):
+            if agent.is_stuck(stuck_time=self.stuck_time):
                 rewards[agent.id] = 0
                 random_move = random.randrange(self.n_actions)
                 next_pos = self._next_pos(agent, random_move)

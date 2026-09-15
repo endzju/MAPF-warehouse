@@ -53,7 +53,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             "num_batches": [50],
             "batch_size": [4096 * 6],
             "num_episodes": [1200],
-            "suffix": ["fix3"],
+            "suffix": ["fix4"],
             "step_limit": [1000],
             "target_update_interval": [60],
             "buffer_length": [1_000_000],
