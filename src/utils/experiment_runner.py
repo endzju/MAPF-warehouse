@@ -22,7 +22,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     print(f"Device: {device}")
 
     # CONFIG
-    model_classes = [MLP, CNN]
+    _model_classes = [MLP, CNN]
     models_settings = []
     eval_robot_list = [n for n in range(10, 101, 5)]
     train_workers = 3
@@ -53,12 +53,107 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             "num_batches": [50],
             "batch_size": [4096 * 6],
             "num_episodes": [1200],
-            "suffix": ["retry2_no_f_vec"],
+            "suffix": ["fix3"],
             "step_limit": [1000],
             "target_update_interval": [60],
             "buffer_length": [1_000_000],
             "float_goal_vector": [False],
         },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(3, 32, 1)], "mlp_layers": [256]},
+        #     ],
+        #     "view_size": [9],
+        #     "num_batches": [20, 30, 40, 50, 60, 70, 80],
+        #     "batch_size": [4096],
+        #     "num_episodes": [1200],
+        #     "suffix": ["sample1"],
+        #     "step_limit": [1000],
+        #     "target_update_interval": [60],
+        #     "buffer_length": [500_000],
+        #     "float_goal_vector": [False],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(3, 32, 1)], "mlp_layers": [256]},
+        #     ],
+        #     "view_size": [9],
+        #     "num_batches": [20, 30, 40, 50, 60, 70, 80],
+        #     "batch_size": [4096 * 2],
+        #     "num_episodes": [1200],
+        #     "suffix": ["sample1"],
+        #     "step_limit": [1000],
+        #     "target_update_interval": [60],
+        #     "buffer_length": [500_000],
+        #     "float_goal_vector": [False],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(3, 32, 1)], "mlp_layers": [256]},
+        #     ],
+        #     "view_size": [9],
+        #     "num_batches": [20, 30, 40, 50, 60, 70, 80],
+        #     "batch_size": [4096 * 4],
+        #     "num_episodes": [1200],
+        #     "suffix": ["sample1"],
+        #     "step_limit": [1000],
+        #     "target_update_interval": [60],
+        #     "buffer_length": [500_000],
+        #     "float_goal_vector": [False],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(3, 32, 1)], "mlp_layers": [256]},
+        #     ],
+        #     "view_size": [9],
+        #     "num_batches": [20, 30, 40, 50, 60, 70, 80],
+        #     "batch_size": [4096 * 8],
+        #     "num_episodes": [1200],
+        #     "suffix": ["sample1"],
+        #     "step_limit": [1000],
+        #     "target_update_interval": [60],
+        #     "buffer_length": [500_000],
+        #     "float_goal_vector": [False],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(3, 32, 1)], "mlp_layers": [256]},
+        #     ],
+        #     "view_size": [9],
+        #     "num_batches": [20, 30, 40, 50, 60, 70, 80],
+        #     "batch_size": [4096 * 16],
+        #     "num_episodes": [1200],
+        #     "suffix": ["sample1"],
+        #     "step_limit": [1000],
+        #     "target_update_interval": [60],
+        #     "buffer_length": [500_000],
+        #     "float_goal_vector": [False],
+        # },
+        # {
+        #     "model_class": [CNN],
+        #     "hidden_layers": [
+        #         {"cnn_layers": [(3, 32, 1)], "mlp_layers": [256]},
+        #         {"cnn_layers": [(3, 32, 1), (3, 32, 1)], "mlp_layers": [256]},
+        #         {
+        #             "cnn_layers": [(3, 32, 1), (3, 32, 1), (3, 32, 1)],
+        #             "mlp_layers": [256],
+        #         },
+        #     ],
+        #     "view_size": [9],
+        #     "num_batches": [40],
+        #     "batch_size": [4096],
+        #     "num_episodes": [1200],
+        #     "suffix": ["sample1"],
+        #     "step_limit": [1000],
+        #     "target_update_interval": [60],
+        #     "buffer_length": [500_000],
+        #     "float_goal_vector": [False],
+        # },
     ]
 
     # MLP 512 neurons

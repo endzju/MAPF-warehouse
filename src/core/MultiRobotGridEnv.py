@@ -249,7 +249,7 @@ class MultiRobotGridEnv(gym.Env):
         self.agents = set()
         self.available_ids = deque(range(self.max_robots))
         empty_cells = list(
-            self.get_empty_cells(include_depot=False, radius_from_depot=1)
+            self.get_empty_cells(include_depot=False, radius_from_depot=2)
         )
         self._reset_depot_max_robots()
         for depot in self.input_depots:
@@ -402,7 +402,7 @@ class MultiRobotGridEnv(gym.Env):
         for agent in self.agents:
             if agent.should_return_to_depot():
                 self.avg_delivery_time = (
-                    self.avg_delivery_time * self.deliveries + agent.step_count
+                    self.avg_delivery_time * self.deliveries + agent.move_count
                 ) / (self.deliveries + 1)
                 self.deliveries += 1
                 remove_agents.add(agent)
@@ -423,6 +423,7 @@ class MultiRobotGridEnv(gym.Env):
                     agent.reset()
                     agent.pos = in_depot.pos
                     agent.task = in_depot.pop_task()
+                    agent.goal_pos, agent.task_type = agent.task.pop_next()
                     agent.in_depot = in_depot
                     agent.out_depot = out_depot
                     agent.id = self._next_id()
@@ -449,7 +450,7 @@ class MultiRobotGridEnv(gym.Env):
         view_grids = self._build_view_grids(agent_positions, agent_goal_positions)
 
         for agent in self.agents:
-            if not agent.is_busy():
+            if agent.should_generate_observation():
                 observations[agent.id] = self._get_obs(
                     agent=agent,
                     view_grids=view_grids,
@@ -572,32 +573,41 @@ class MultiRobotGridEnv(gym.Env):
 
     def _avg_manhattan_time(self) -> float:
         out_time_dict = defaultdict(list)
-        delivery_time = 0
+        all_deliveries_time = 0
 
         # Calculate manhattan time of all tasks of all depots
+        # Without waiting for exit
         for in_depot, out_depot in zip(self.input_depots, self.output_depots):
-            exit_times_heap = []
+            absolute_exit_times_heap = []
             exit_times = []
             time_from_start = 0
             for task in in_depot.tasks:
                 # waiting to enter
                 positions = [in_depot.pos] + task.goal_positions + [out_depot.pos]
-                time = (
+                moving_time = 0
+                for i in range(len(positions) - 1):
+                    moving_time += (
+                        manhattan_distance(positions[i], positions[i + 1])
+                        * self.action_times[TaskType.MOVE]
+                    )
+                all_deliveries_time += moving_time
+
+                relative_exit_time = moving_time + (
                     len(task.goal_positions) * self.action_times[TaskType.PICKUP]
                     + self.action_times[TaskType.ENTER]
                     + self.action_times[TaskType.LEAVE]
                 )
-                for i in range(len(positions) - 1):
-                    time += manhattan_distance(positions[i], positions[i + 1])
-                delivery_time += time
-                if len(exit_times_heap) == in_depot.stored_robots:
+
+                if len(absolute_exit_times_heap) == in_depot.stored_robots:
                     time_from_start = max(
-                        heapq.heappop(exit_times_heap), time_from_start
+                        heapq.heappop(absolute_exit_times_heap), time_from_start
                     )
-                exit_time = time_from_start + time
-                heapq.heappush(exit_times_heap, exit_time)
-                exit_times.append(exit_time)
-                time_from_start += 1 + self.action_times[TaskType.ENTER]
+                absolute_exit_time = time_from_start + relative_exit_time
+                heapq.heappush(absolute_exit_times_heap, absolute_exit_time)
+                exit_times.append(absolute_exit_time)
+                time_from_start += (
+                    self.action_times[TaskType.ENTER] + self.action_times[TaskType.MOVE]
+                )
 
             out_time_dict[out_depot] += exit_times
 
@@ -611,10 +621,14 @@ class MultiRobotGridEnv(gym.Env):
             for i in range(len(time_list)):
                 new_dist = max(min_dist, time_list[i])
                 diff = new_dist - time_list[i]
-                delivery_time += diff
+                all_deliveries_time += diff
                 time_list[i] = new_dist
-                min_dist = time_list[i] + 1 + self.action_times[TaskType.LEAVE]
-        return delivery_time / len(self.tasks)
+                min_dist = (
+                    time_list[i]
+                    + self.action_times[TaskType.MOVE]
+                    + self.action_times[TaskType.LEAVE]
+                )
+        return all_deliveries_time / len(self.tasks)
 
     def handle_events(self):
         events = pygame.event.get()

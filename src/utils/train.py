@@ -1,7 +1,5 @@
 import copy
-import random
 import time
-from collections import deque
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
@@ -15,20 +13,6 @@ from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
 from src.neural_networks.model_config import ModelConfig
 from src.utils.plots import plot_avg_delivery_times
-
-
-class ReplayBuffer:
-    def __init__(self, capacity=10000):
-        self.buffer = deque(maxlen=capacity)
-
-    def push(self, state, action, reward, next_state, done):
-        self.buffer.append((state, action, reward, next_state, done))
-
-    def sample(self, batch_size):
-        return random.sample(self.buffer, batch_size)
-
-    def __len__(self):
-        return len(self.buffer)
 
 
 class EfficientReplayBuffer:
@@ -235,7 +219,9 @@ def train(
 
             memory_push_tic = time.time()
             for agent_id in obs:
-                if agent_id in next_obs:
+                if agent_id in next_obs and agent_id in rewards:
+                    if rewards[agent_id] > 50:
+                        print(rewards[agent_id])
                     memory.push(
                         obs[agent_id],
                         actions[agent_id],
@@ -323,7 +309,6 @@ def _train_worker(args: tuple) -> ModelConfig:
         env=env,
         model_config=config,
         **config.get_train_params(),
-        verbose=0,
     )
     best_trained_model, _, _, _ = train_results
     model_path = config.get_model_path()

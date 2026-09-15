@@ -44,21 +44,20 @@ class DeliveryRobot:
         }
         self.step_count: int = 0
         self.move_count: int = 0
-        self.goal_pos, self.task_type = None, None
+
+        if self.task.is_completed():
+            raise ValueError("Task must not be completed")
+        self.goal_pos, self.task_type = self.task.pop_next()
         self.next_pos = None
         self.pos_history = deque()
         self.busy_time = busy_time
         self.should_exit = False
+        self.allow_next_observation = False
 
     def step(self):
         """
         Returns True if robot should be removed
         """
-        # print("debug", self.id, self.pos, self.task_type, self.goal_pos, self.busy_time)
-        if self.goal_pos is None and not self.task.is_completed():
-            self.goal_pos, self.task_type = self.task.pop_next()
-
-        # update step count
         self.step_count += 1
 
         # wait if idle
@@ -67,22 +66,7 @@ class DeliveryRobot:
             self.pos_history.append(self.pos)
             return
 
-        # leave if on depot
-        if self.task_type == TaskType.LEAVE and self.pos == self.out_depot.pos:
-            # print(
-            #     "debug1",
-            #     self._get_exit_wait_length(),
-            #     self.action_times[TaskType.LEAVE],
-            #     self.pos,
-            # )
-            if self._get_exit_wait_length() == self.action_times[TaskType.LEAVE] - 1:
-                self.pos_history.append(self.pos)
-                self.in_depot.finished_tasks.append(self.task)
-                # print("SETTING TASK AS DONE, robotID:", self.id, self.pos)
-                self.should_exit = True
-            else:
-                self.pos_history.append(self.pos)
-            return
+        self.move_count += 1
 
         # move
         self.move()
@@ -98,7 +82,6 @@ class DeliveryRobot:
         if self.next_pos is None:
             self.next_pos = self.pos
         self.pos_history.append(self.pos)
-        move_time = 1
         if self.next_pos != self.pos:
             self.busy_time = self.action_times[TaskType.MOVE] - 1
         if self.next_pos:
@@ -106,9 +89,10 @@ class DeliveryRobot:
             self.next_pos = None
 
     def finish_goal(self):
-        if self.task_type == TaskType.LEAVE:
-            return
         self.busy_time = self.action_times[self.task_type]
+        if self.task_type == TaskType.LEAVE:
+            self.should_exit = True
+        self.allow_next_observation = True
 
     def is_stuck(self) -> bool:
         if (
@@ -140,7 +124,7 @@ class DeliveryRobot:
 
     def is_done(self) -> bool:
         return (
-            not self.is_idle()
+            not self.is_busy()
             and self.goal_pos == self.out_depot.pos
             and self.task.is_completed()
         )
@@ -164,11 +148,18 @@ class DeliveryRobot:
         return count
 
     def should_return_to_depot(self) -> bool:
-        return self.should_exit
+        return self.should_exit and not self.is_busy()
+
+    def should_generate_observation(self) -> bool:
+        if self.allow_next_observation:
+            self.allow_next_observation = False
+            return True
+        return not self.is_busy()
 
     def _next_task(self) -> None:
+        if self.should_exit:
+            return
         if self.task.is_completed():
-            # go to depot
             self.goal_pos, self.task_type = self.out_depot.pos, TaskType.LEAVE
             return
         self.goal_pos, self.task_type = self.task.pop_next()
@@ -190,6 +181,7 @@ class DeliveryRobot:
         self.task_type = None
         self.goal_pos = None
         self.should_exit = False
+        self.allow_next_observation = False
 
     def __eq__(self, other: "DeliveryRobot"):
         return isinstance(other, DeliveryRobot) and self.id == other.id

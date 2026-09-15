@@ -5,8 +5,12 @@ import torch
 
 from src.agents.action_agent import ActionAgent
 from src.core.MultiRobotGridEnv import MultiRobotGridEnv
+from src.neural_networks.architectures.cnn import CNN
 from src.neural_networks.architectures.mlp import MLP
 from src.neural_networks.model_config import ModelConfig
+from src.utils.enums import TaskType
+
+_ = [CNN, MLP]
 
 
 def get_hidden_layers(model_name):
@@ -49,10 +53,10 @@ def main(
         }
         observations, _rewards, terminated, truncated, _info = env.step(actions)
         if render:
-            env.render_move(move_time=0.3, fps=30)
+            env.render_move(move_time=0.1, fps=30)
             # time.sleep(0.07)
     if render:
-        time.sleep(1)
+        time.sleep(0.2)
     return env.avg_manhattan_distance, env.avg_delivery_time
 
 
@@ -60,9 +64,10 @@ if __name__ == "__main__":
     models_path = Path(__file__).resolve().parent / "neural_networks" / "models"
 
     # CONFIG
-    config_params = {
+
+    config1 = {
         "grid_size": (20, 20),
-        "step_limit": 5000,
+        "step_limit": 1000,
         "task_length": 5,
         "device": torch.device("cpu"),
         "model_class": MLP,
@@ -74,15 +79,37 @@ if __name__ == "__main__":
         "num_batches": 50,
         "num_tasks": 3000,
     }
-    model_config = ModelConfig(**config_params)
+    config2 = {
+        "grid_size": (20, 20),
+        "step_limit": 5000,
+        "task_length": 5,
+        "device": torch.device("cpu"),
+        "model_class": CNN,
+        "hidden_layers": {"mlp_layers": [256], "cnn_layers": [(11, 16, 0)]},
+        "view_size": 11,
+        "num_robots": 60,
+        "suffix": "longer1",
+        "batch_size": 4096,
+        "num_batches": 50,
+        "num_tasks": 3000,
+        "buffer_length": 500_000,
+    }
+    model_config = ModelConfig(**config1)
     model = model_config.load_model().to("cpu")
 
     model_config.num_robots = 60
 
     manhattan_delivery_times = []
     delivery_times = []
+    action_times = {
+        TaskType.ENTER: 1,
+        TaskType.PICKUP: 1,
+        TaskType.LEAVE: 1,
+        TaskType.MOVE: 1,
+    }
     env = MultiRobotGridEnv(
         **model_config.get_env_params(),
+        action_times=action_times,
     )
     # try:
     avg_manhattan_delivery_time, avg_delivery_time = main(
