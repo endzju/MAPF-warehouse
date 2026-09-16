@@ -310,9 +310,7 @@ def _train_worker(args: tuple) -> ModelConfig:
     if not should_train:
         return config
 
-    env = MultiRobotGridEnv(
-        **config.get_env_params(),
-    )
+    env = MultiRobotGridEnv(**config.get_env_params(), stuck_time=6)
     train_results = train(
         env=env,
         model_config=config,

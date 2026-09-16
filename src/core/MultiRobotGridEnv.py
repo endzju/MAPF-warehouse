@@ -379,7 +379,7 @@ class MultiRobotGridEnv(gym.Env):
                 continue
             action = actions.get(agent.id, 4)  # 4 -> default is wait
 
-            if agent.is_stuck(stuck_time=self.stuck_time):
+            if agent.is_stuck():
                 rewards[agent.id] = 0
                 random_move = random.randrange(self.n_actions)
                 next_pos = self._next_pos(agent, random_move)
@@ -430,6 +430,9 @@ class MultiRobotGridEnv(gym.Env):
                     agent.in_depot = in_depot
                     agent.out_depot = out_depot
                     agent.id = self._next_id()
+                    agent.action_times = self.action_times
+                    agent.stuck_time = self.stuck_time
+
                 else:
                     agent = DeliveryRobot(
                         position=in_depot.pos,
@@ -438,6 +441,7 @@ class MultiRobotGridEnv(gym.Env):
                         out_depot=out_depot,
                         id=self._next_id(),
                         action_times=self.action_times,
+                        stuck_time=self.stuck_time,
                     )
                 agent.busy_time = self.action_times[TaskType.ENTER]
                 self.agents.add(agent)

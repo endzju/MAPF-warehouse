@@ -1,5 +1,4 @@
 from collections import deque
-from itertools import islice
 
 # if TYPE_CHECKING:
 from src.models.depot import Depot
@@ -20,6 +19,8 @@ class DeliveryRobot:
     next_pos: tuple[int, int] | None
     pos_history: deque[tuple[int, int]]
     busy_time: int
+    stuck_time: int
+    stuck_pos_history: deque[tuple[int, int]]
 
     def __init__(
         self,
@@ -30,6 +31,7 @@ class DeliveryRobot:
         id: int,
         action_times: dict[TaskType, int] | None = None,
         busy_time=0,
+        stuck_time=0,
     ):
         self.pos = position
         self.task = task
@@ -50,6 +52,8 @@ class DeliveryRobot:
         self.next_pos = None
         self.pos_history = deque()
         self.busy_time = busy_time
+        self.stuck_time = stuck_time
+        self.stuck_pos_history = deque(maxlen=self.stuck_time)
         self.should_exit = False
         self.allow_next_observation = False
 
@@ -58,25 +62,23 @@ class DeliveryRobot:
         Returns True if finished goal
         """
         self.step_count += 1
+        finished_goal = False
 
         # wait if idle
         if self.busy_time > 0:
             self.busy_time = max(0, self.busy_time - 1)
             self.pos_history.append(self.pos)
-            return False
+        else:
+            self.move_count += 1
 
-        self.move_count += 1
+            # move
+            self.move()
 
-        # move
-        self.move()
-
-        # finish task and set idle time
-        finished_goal = False
-
-        if self.pos == self.goal_pos:
-            finished_goal = True
-            self.finish_goal()
-            self._next_task()
+            # finish task and set idle time
+            if self.pos == self.goal_pos:
+                finished_goal = True
+                self.finish_goal()
+                self._next_task()
 
         return finished_goal
 
@@ -84,6 +86,7 @@ class DeliveryRobot:
         if self.next_pos is None:
             self.next_pos = self.pos
         self.pos_history.append(self.pos)
+        self.stuck_pos_history.append(self.pos)
         if self.next_pos != self.pos:
             self.busy_time = self.action_times[TaskType.MOVE] - 1
         if self.next_pos:
@@ -97,13 +100,12 @@ class DeliveryRobot:
             self.should_exit = True
         self.allow_next_observation = True
 
-    def is_stuck(self, stuck_time=0) -> bool:
-        if stuck_time == 0:
+    def is_stuck(self) -> bool:
+        if self.stuck_time == 0:
             return False
-        if len(self.pos_history) < stuck_time:
+        if len(self.stuck_pos_history) < self.stuck_time:
             return False
-        recent_positions = islice(reversed(self.pos_history), stuck_time)
-        unique_positions = set(recent_positions)
+        unique_positions = set(self.stuck_pos_history)
         return len(unique_positions) <= 2
 
     def set_next_pos(self, pos: tuple[int, int]):
@@ -131,7 +133,7 @@ class DeliveryRobot:
         return self.busy_time > 0
 
     def is_entering_grid(self) -> bool:
-        return len(self.pos_history) <= self.action_times[TaskType.ENTER]
+        return self.step_count <= self.action_times[TaskType.ENTER]
 
     def is_leaving_grid(self) -> bool:
         return (
@@ -172,6 +174,7 @@ class DeliveryRobot:
         self.move_count = 0
         self.was_blocked = False
         self.pos_history = deque()
+        self.stuck_pos_history = deque(maxlen=self.stuck_time)
         self.next_pos = None
         self.task_type = None
         self.goal_pos = None

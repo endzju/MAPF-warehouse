@@ -70,7 +70,7 @@ def evaluate(
         delivery_times.append(avg_delivery_time)
 
     movement_efficiency = sum(delivery_times) / sum(manhattan_delivery_times)
-    robot_throughput_per_100ticks = 100 / mean(delivery_times) * env.num_robots
+    robot_throughput_per_100ticks = 100 / mean(delivery_times) * env.max_robots
     eval_results = {
         "manhattan_delivery_times": manhattan_delivery_times,
         "avg_manhattan_delivery_time": mean(manhattan_delivery_times),
@@ -86,9 +86,7 @@ def evaluate(
 def _eval_worker(args: tuple) -> ModelConfig:
     config, env_params, num_simulations, data_path = args
     model = config.load_model()
-    env = MultiRobotGridEnv(
-        **env_params,
-    )
+    env = MultiRobotGridEnv(**env_params, stuck_time=6)
     eval_results = evaluate(
         num_simulations=num_simulations,
         env=env,

@@ -50,7 +50,22 @@ def run_experiments(force_train: bool = True, eval: bool = True):
                 {"mlp_layers": [512]},
             ],
             "view_size": [7],
-            "num_batches": [20, 30, 40, 50, 60, 70, 80],
+            "num_batches": [50],
+            "batch_size": [4096 * 6],
+            "num_episodes": [1500],
+            "suffix": ["fix5"],
+            "step_limit": [900],
+            "target_update_interval": [60],
+            "buffer_length": [1_000_000],
+            "float_goal_vector": [True],
+        },
+        {
+            "model_class": [MLP],
+            "hidden_layers": [
+                {"mlp_layers": [512]},
+            ],
+            "view_size": [7],
+            "num_batches": [30, 40, 50, 60, 70],
             "batch_size": [4096 * 6],
             "num_episodes": [2000],
             "suffix": ["fix4"],
@@ -223,7 +238,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
 
 if __name__ == "__main__":
     print("Running experiments...")
-    run_experiments(force_train=False, eval=False)
+    run_experiments(force_train=False, eval=True)
     # try:
     #     run_experiments(train=False, eval=False)
     # except KeyboardInterrupt:
