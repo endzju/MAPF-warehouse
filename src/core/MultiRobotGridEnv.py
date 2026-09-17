@@ -47,7 +47,7 @@ class MultiRobotGridEnv(gym.Env):
         tasks: list[Task] | None = None,
         obstacles: set[tuple[int, int]] | None = None,
         task_tsp: bool = False,
-        stuck_time: int = 0,
+        stuck_time: int = 6,
     ):
         super().__init__()
         self.grid_width, self.grid_height = grid_size

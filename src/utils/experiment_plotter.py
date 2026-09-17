@@ -38,43 +38,19 @@ if __name__ == "__main__":
     }
     variations = [
         {
-            "num_batches": [30, 35, 40],
-            "suffix": ["longer1", "longer2", "longer3"],
-            "num_episodes": [1500],
-        },
-        {
-            "batch_size": [4096 * 8],
-            "num_batches": [50],
-            "suffix": ["longer1", "longer2", "longer3", "longer4", "longer5"],
-            "num_episodes": [1500],
-        },
-        {
             "model_class": [MLP],
             "hidden_layers": [
-                {"mlp_layers": [128]},
-                {"mlp_layers": [256]},
                 {"mlp_layers": [512]},
-                {"mlp_layers": [1024]},
-                {"mlp_layers": [128, 64]},
-                {"mlp_layers": [256, 128]},
-                {"mlp_layers": [512, 256]},
-            ],
-            "view_size": [7, 9, 11],
-            "suffix": ["longer1"],
-            "num_episodes": [1500],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [16]},
-                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [32]},
-                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [64]},
-                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [128]},
-                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [256]},
-                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [512]},
             ],
             "view_size": [7],
-            "suffix": ["sample1"],
+            "num_batches": [50],
+            "batch_size": [4096 * 6],
+            "num_episodes": [1500],
+            "suffix": ["fix5"],
+            "step_limit": [900],
+            "target_update_interval": [60],
+            "buffer_length": [1_000_000],
+            "float_goal_vector": [True],
         },
     ]
 

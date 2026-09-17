@@ -92,7 +92,7 @@ def _eval_worker(args: tuple) -> ModelConfig:
         env=env,
         model=model,
     )
-    data = {env_params["env_max_robots"]: eval_results}
+    data = {env_params["max_robots"]: eval_results}
     safe_write_json(data, data_path)
     return config
 

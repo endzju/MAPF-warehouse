@@ -94,7 +94,23 @@ if __name__ == "__main__":
         "num_tasks": 3000,
         "buffer_length": 500_000,
     }
-    model_config = ModelConfig(**config1)
+    config3 = {
+        "grid_size": (20, 20),
+        "device": torch.device("cpu"),
+        "model_class": MLP,
+        "hidden_layers": {"mlp_layers": [512]},
+        "view_size": 7,
+        "num_batches": 50,
+        "batch_size": 4096 * 6,
+        "num_episodes": 1500,
+        "suffix": "fix5",
+        "step_limit": 900,
+        "target_update_interval": 60,
+        "buffer_length": 1_000_000,
+        "float_goal_vector": True,
+    }
+
+    model_config = ModelConfig(**config3)
     model = model_config.load_model().to("cpu")
 
     model_config.num_robots = 60
