@@ -99,8 +99,9 @@ def plot_avg_delivery_times(
         color="red",
         fontweight="bold",
     )
-
+    plt.suptitle(checkpoint_name, fontsize=12)
     plt.title(f"Average Delivery Time (Last {window_size} Episodes)")
+    plt.legend()
     plt.xlabel("window")
     plt.grid(True)
     plt.ylabel("Avg delivery time")
