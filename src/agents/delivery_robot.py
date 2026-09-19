@@ -1,7 +1,5 @@
 from collections import deque
 
-import numpy as np
-
 # if TYPE_CHECKING:
 from src.models.depot import Depot
 from src.models.task import Task
@@ -23,8 +21,6 @@ class DeliveryRobot:
     busy_time: int
     stuck_time: int
     stuck_pos_history: deque[tuple[int, int]]
-    cached_view: np.ndarray
-    cached_additional_input: np.ndarray
 
     def __init__(
         self,
@@ -33,8 +29,6 @@ class DeliveryRobot:
         in_depot: Depot,
         out_depot: Depot,
         id: int,
-        cached_view,
-        cached_additional_input,
         action_times: dict[TaskType, int] | None = None,
         busy_time=0,
         stuck_time=0,
@@ -62,8 +56,6 @@ class DeliveryRobot:
         self.stuck_pos_history = deque(maxlen=self.stuck_time)
         self.should_exit = False
         self.allow_next_observation = False
-        self.cached_view = cached_view
-        self.cached_additional_input = cached_additional_input
 
     def step(self):
         """

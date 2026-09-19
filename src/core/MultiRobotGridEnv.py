@@ -440,13 +440,6 @@ class MultiRobotGridEnv(gym.Env):
                     agent.stuck_time = self.stuck_time
 
                 else:
-                    cached_view = np.zeros(
-                        (self.view_dims, self.agent_view_size, self.agent_view_size),
-                        dtype=np.uint8,
-                    )
-                    cached_additional_input = np.zeros(
-                        self.additional_input_size, dtype=np.float32
-                    )
                     agent = DeliveryRobot(
                         position=in_depot.pos,
                         task=in_depot.pop_task(),
@@ -455,8 +448,6 @@ class MultiRobotGridEnv(gym.Env):
                         id=self._next_id(),
                         action_times=self.action_times,
                         stuck_time=self.stuck_time,
-                        cached_view=cached_view,
-                        cached_additional_input=cached_additional_input,
                     )
                 agent.busy_time = self.action_times[TaskType.ENTER]
                 self.agents.add(agent)
@@ -549,15 +540,16 @@ class MultiRobotGridEnv(gym.Env):
         view_grids: np.ndarray = None,
         dummy: bool = False,
     ) -> dict[str, np.ndarray]:
+        view = np.zeros(
+            (self.view_dims, self.agent_view_size, self.agent_view_size),
+            dtype=np.uint8,
+        )
+        additional_input = np.zeros(self.additional_input_size, dtype=np.float32)
         if dummy:
             return {
                 "view": self.dummy_view,
                 "additional_input": self.dummy_additional_input,
             }
-        view = agent.cached_view
-        view.fill(0)
-        additional_input = agent.cached_additional_input
-        additional_input.fill(0)
         # chanel 0: obstacle grid
         # chanel 1: other agents
         # chanel 2: other agents' goals

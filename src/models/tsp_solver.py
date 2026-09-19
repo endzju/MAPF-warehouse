@@ -18,7 +18,6 @@ class pyvrp_solver:
         m = Model()
         m.add_vehicle_type(
             num_available=1,
-            capacity=10_000,
         )
 
         m.add_depot(
@@ -39,8 +38,9 @@ class pyvrp_solver:
                 )
 
         result = m.solve(
-            stop=MaxRuntime(1),
+            stop=MaxRuntime(0.01),
             seed=42,
+            display=False,
         )
         route_indices = [i - 1 for i in list(result.best.routes()[0])]
         return route_indices
