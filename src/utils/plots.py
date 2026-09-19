@@ -62,7 +62,7 @@ def plot_avg_delivery_times(
             "avg_delivery_times and avg_manhattan_times must have the same length"
         )
     checkpoint_name = checkpoint_name.removesuffix(".pth")
-    path = path / f"{checkpoint_name}_avg_delivery_times.png"
+    path = path / f"{checkpoint_name}.png"
 
     plt.figure(figsize=(10, 6))
     x = range(len(avg_delivery_times))

@@ -50,8 +50,8 @@ def run_experiments(force_train: bool = True, eval: bool = True):
                 {"mlp_layers": [512]},
             ],
             "view_size": [7],
-            "num_batches": [25, 30, 35, 40, 45, 50, 55, 60, 65],
-            "batch_size": [4096 * 8, 4096 * 4, 4096 * 2, 4096],
+            "num_batches": [7, 8, 9, 10, 11, 12, 13, 40, 50, 60],
+            "batch_size": [4096 * 8],
             "suffix": ["search1"],
             "target_update_interval": [30],
             "buffer_length": [500_000],
@@ -97,7 +97,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             "target_update_interval": [30],
             "buffer_length": [500_000],
             "float_goal_vector": [True],
-            "gamma": [0.8, 0.9, 0.95, 0.98],
+            "gamma": [0.9, 0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97, 0.98],
         },
         {
             "model_class": [MLP],
@@ -360,6 +360,11 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     # batch_size 4096 * 8 	best num batches ~ 50, best result -> 75.15%
     # batch_size 4096 * 16 	best num batches ~ 45, best result -> 74.89%
     # batch_size 4096 * 32 	best num batches ~ 50, best result -> 74.93%
+
+    # MLP 512
+    # batch_size 4096 * 8:
+    # best num batches ~ 10
+    # best gamma ~0.950
 
     # CNN k3c64p1
     # batch_size 1024   	best num batches ~ 30, best result -> 49.12%

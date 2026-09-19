@@ -95,8 +95,6 @@ if __name__ == "__main__":
         "buffer_length": 500_000,
     }
     config3 = {
-        "grid_size": (20, 20),
-        "device": torch.device("cpu"),
         "model_class": MLP,
         "hidden_layers": {"mlp_layers": [512]},
         "view_size": 7,
@@ -110,7 +108,29 @@ if __name__ == "__main__":
         "float_goal_vector": True,
     }
 
-    model_config = ModelConfig(**config3)
+    config4 = {
+        "model_class": [MLP],
+        "hidden_layers": [
+            {"mlp_layers": [512]},
+        ],
+        "view_size": [7],
+        "num_batches": [50],
+        "batch_size": [4096 * 8],
+        "suffix": ["search1"],
+        "target_update_interval": [30],
+        "buffer_length": [500_000],
+        "float_goal_vector": [True],
+        "gamma": [0.95],
+        "step_limit": 3000,
+    }
+    def_conf = {
+        "grid_size": (20, 20),
+        "device": torch.device("cpu"),
+    }
+
+    config = {k: v[0] if isinstance(v, list) else v for k, v in config4.items()}
+
+    model_config = ModelConfig(**(def_conf | config))
     model = model_config.load_model().to("cpu")
 
     model_config.num_robots = 60
@@ -127,6 +147,8 @@ if __name__ == "__main__":
         **model_config.get_env_params(),
         action_times=action_times,
     )
+    env.num_tasks = 10000
+    env.step_limit = 50000
     # try:
     avg_manhattan_delivery_time, avg_delivery_time = main(
         model=model,

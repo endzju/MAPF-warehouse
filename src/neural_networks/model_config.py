@@ -100,6 +100,7 @@ class ModelConfig:
         parts.append(f"b{self.num_batches}")
         parts.append(f"g{self.gamma:.3f}".replace(".", ""))
         parts.append(f"t{self.step_limit}")
+        parts.append(f"d{self.epsilon_decay:.3f}".replace(".", ""))
 
         obs_parts = []
         if not getattr(self, "float_goal_vector", True):
