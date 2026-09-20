@@ -120,6 +120,7 @@ def read_model_data(
         / f"{model_config.get_params_string()}.json"
     )
     if not data_path.exists():
+        print(f"File {data_path} does not exist")
         return None
     with open(data_path, "r", encoding="utf-8") as f:
         return json.load(f)
