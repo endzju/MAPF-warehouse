@@ -25,7 +25,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     _model_classes = [MLP, CNN]
     models_settings = []
     eval_robot_list = [n for n in range(10, 101, 5)]
-    train_workers = 4
+    train_workers = 3
 
     base_params = {
         "grid_size": [(20, 20)],
@@ -50,8 +50,21 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             "hidden_layers": [
                 {"mlp_layers": [1024]},
             ],
+            "view_size": [9, 11],
+            "num_batches": [8, 10, 12],
+            "batch_size": [4096 * 8],
+            "suffix": ["search1"],
+            "target_update_interval": [30],
+            "buffer_length": [500_000],
+            "float_goal_vector": [True],
+        },
+        {
+            "model_class": [MLP],
+            "hidden_layers": [
+                {"mlp_layers": [1024]},
+            ],
             "view_size": [7],
-            "num_batches": [8, 10, 12, 14, 20, 30, 40, 50],
+            "num_batches": [4, 5, 6, 7, 8, 9, 10, 11, 12],
             "batch_size": [4096 * 8],
             "suffix": ["search1"],
             "target_update_interval": [30],
@@ -77,9 +90,9 @@ def run_experiments(force_train: bool = True, eval: bool = True):
                 {"cnn_layers": [(3, 32, 1)], "mlp_layers": [256]},
             ],
             "view_size": [9],
-            "num_batches": [20, 30, 40, 50, 60, 70, 80],
-            "batch_size": [4096, 4096 * 2, 4096 * 4, 4096 * 8],
-            "num_episodes": [1200],
+            "num_batches": [10, 15, 20, 25, 30, 35, 40],
+            "batch_size": [512, 1024, 2048, 4096, 4096 * 2, 4096 * 4, 4096 * 8],
+            "num_episodes": [1000],
             "suffix": ["sample1"],
             "target_update_interval": [30],
             "buffer_length": [500_000],
