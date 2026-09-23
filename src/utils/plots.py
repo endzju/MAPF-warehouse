@@ -104,6 +104,7 @@ def plot_avg_delivery_times(
     plt.legend()
     plt.xlabel("window")
     plt.grid(True)
+    # plt.ylim(0, 1000)
     plt.ylabel("Avg delivery time")
     plt.savefig(path, dpi=300)
     plt.close()

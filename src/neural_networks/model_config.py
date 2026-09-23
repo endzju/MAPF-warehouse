@@ -32,7 +32,7 @@ class ModelConfig:
     num_batches: int = 100
     buffer_length: int = 1_000_000
     target_update_interval: int = 60
-    gamma: float = 0.99
+    gamma: float = 0.95
     num_episodes: int = 1000
     epsilon: float = 1.0
     epsilon_min: float = 0

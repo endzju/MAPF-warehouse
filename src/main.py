@@ -123,12 +123,26 @@ if __name__ == "__main__":
         "gamma": [0.95],
         "step_limit": 3000,
     }
+
+    config5 = {
+        "model_class": [MLP],
+        "hidden_layers": [
+            {"mlp_layers": [1024]},
+        ],
+        "view_size": [11],
+        "num_batches": [9],
+        "batch_size": [4096 * 8],
+        "suffix": ["search1"],
+        "target_update_interval": [30],
+        "buffer_length": [500_000],
+        "step_limit": [3000],
+    }
     def_conf = {
         "grid_size": (20, 20),
         "device": torch.device("cpu"),
     }
 
-    config = {k: v[0] if isinstance(v, list) else v for k, v in config4.items()}
+    config = {k: v[0] if isinstance(v, list) else v for k, v in config5.items()}
 
     model_config = ModelConfig(**(def_conf | config))
     model = model_config.load_model().to("cpu")
