@@ -185,7 +185,7 @@ def plot_delivery_throughput(
 ):
     x_ticks_set = {str(tick) for tick in x_ticks}
     data = read_models_data(model_configs=model_configs)
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(14, 6))
     for i, (model_name, evaluation) in enumerate(data.items()):
         evaluation = {k: v for k, v in evaluation.items() if k in x_ticks_set}
         evaluation = dict(sorted(evaluation.items(), key=lambda item: int(item[0])))

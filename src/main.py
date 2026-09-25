@@ -125,18 +125,19 @@ if __name__ == "__main__":
     }
 
     config5 = {
-        "model_class": [MLP],
+        "model_class": [CNN],
         "hidden_layers": [
-            {"mlp_layers": [1024]},
+            {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
         ],
-        "view_size": [11],
-        "num_batches": [9],
-        "batch_size": [4096 * 8],
+        "view_size": [9],
+        "num_batches": [20],
+        "batch_size": [4096 * 4],
         "suffix": ["search1"],
         "target_update_interval": [30],
         "buffer_length": [500_000],
-        "step_limit": [3000],
+        "step_limit": 4000,
     }
+
     def_conf = {
         "grid_size": (20, 20),
         "device": torch.device("cpu"),

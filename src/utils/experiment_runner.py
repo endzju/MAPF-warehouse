@@ -47,52 +47,17 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     }
     variations = [
         {
-            "model_class": [MLP],
-            "hidden_layers": [
-                {"mlp_layers": [1024]},
-            ],
-            "view_size": [11],
-            "num_batches": [10, 15, 20],
-            "batch_size": [4096 * 8],
-            "suffix": ["search1"],
-            "target_update_interval": [30],
-            "buffer_length": [500_000],
-        },
-        {
-            "model_class": [MLP],
-            "hidden_layers": [
-                {"mlp_layers": [1024]},
-            ],
-            "view_size": [11],
-            "num_batches": [10],
-            "batch_size": [4096 * 8],
-            "suffix": ["search1"],
-            "target_update_interval": [10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
-            "buffer_length": [500_000],
-        },
-        {
-            "model_class": [MLP],
-            "hidden_layers": [
-                {"mlp_layers": [1024]},
-            ],
-            "view_size": [11],
-            "num_batches": [10],
-            "batch_size": [4096 * 8],
-            "suffix": ["search1"],
-            "target_update_interval": [30],
-            "buffer_length": [300_000, 400_000, 500_000, 600_000, 700_000],
-        },
-        {
             "model_class": [CNN],
             "hidden_layers": [
                 {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
             ],
-            "view_size": [9, 11],
+            "view_size": [9],
             "num_batches": [20],
-            "batch_size": [4096 * 8],
+            "batch_size": [4096 * 4],
             "suffix": ["search1"],
             "target_update_interval": [30],
-            "buffer_length": [300_000, 500_000],
+            "buffer_length": [500_000, 600_000, 700_000, 800_000],
+            "step_limit": [4000],
         },
         {
             "model_class": [CNN],
@@ -100,32 +65,65 @@ def run_experiments(force_train: bool = True, eval: bool = True):
                 {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
             ],
             "view_size": [9],
-            "num_batches": [20],
-            "batch_size": [4096 * 8, 4096 * 4, 4096 * 2],
+            "num_batches": [16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40],
+            "batch_size": [4096 * 4],
             "suffix": ["search1"],
             "target_update_interval": [30],
-            "buffer_length": [300_000, 400_000, 500_000],
+            "buffer_length": [500_000],
+            "step_limit": [4000],
+        },
+        {
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(3, 4, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 4, 0)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 8, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 8, 0)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 16, 0)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 32, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 32, 0)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 64, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 64, 0)], "mlp_layers": [256]},
+            ],
+            "view_size": [9],
+            "num_batches": [20],
+            "batch_size": [4096 * 4],
+            "suffix": ["search1"],
+            "target_update_interval": [30],
+            "buffer_length": [500_000],
+            "step_limit": [4000],
+        },
+        {
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [128]},
+                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [512]},
+                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [128, 64]},
+                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256, 128]},
+                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [512, 256]},
+            ],
+            "view_size": [9],
+            "num_batches": [20],
+            "batch_size": [4096 * 4],
+            "suffix": ["search1"],
+            "target_update_interval": [30],
+            "buffer_length": [500_000],
+            "step_limit": [4000],
         },
         {
             "model_class": [CNN],
             "hidden_layers": [
                 {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
             ],
-            "view_size": [9],
+            "view_size": [11, 13],
             "num_batches": [20],
-            "batch_size": [4096 * 8],
-            "num_episodes": [1000],
-            "suffix": ["sample1"],
+            "batch_size": [4096 * 4],
+            "suffix": ["search1"],
             "target_update_interval": [30],
             "buffer_length": [500_000],
-            "step_limit": [
-                5000,
-                6000,
-                7000,
-                8000,
-                9000,
-                10000,
-            ],
+            "step_limit": [4000],
         },
     ]
 
@@ -137,30 +135,8 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     # best step limit >= 3000
     #
 
-    # CNN k3c64p1
-    # batch_size 1024   	best num batches ~ 30, best result -> 49.12%
-    # batch_size 2048 		best num batches ~ 30, best result -> 58.70%
-    # batch_size 4096 		best num batches ~ 40 or 90, best result -> 65.10%, quite stable
-    # batch_size 4096 * 2 	best num batches ~ 20-30, best result -> ?
-    # batch_size 4096 * 4 	best num batches ~ 30, best result -> 63.53%, stable
-    # batch_size 4096 * 8 	best num batches ~ 20-30, best result -> ?
-
-    # CNN k3c64p0
-    # batch_size 1024   	best num batches ~ 30, best result -> 56.02%
-    # batch_size 2048 		best num batches ~ 30, best result -> 60.64%
-    # batch_size 4096 		best num batches ~ 30, best result -> 63.22%
-    # batch_size 4096 * 2 	best num batches ~ 30, best result -> 65.26%, very stable
-    # batch_size 4096 * 4 	best num batches ~ 20, best result -> 61.74%, unstable
-
-    # CNN k3c32p1
-    # batch_size 4096   	best num batches ~ +-30, best result -> 64.36%, needs more training
-    # batch_size 4096 * 2 	best num batches ~ 22-26, best result -> 63.63%, a bit unstable
-    # batch_size 4096 * 4 	best num batches ~ +-30, best result -> 65.81%, stable
-
-    # CNN k3c32p0
-    # batch_size 4096   	best num batches ~ 26, best result -> 64.76%, a bit unstable
-    # batch_size 4096 * 2 	best num batches ~ 26, best result -> 65.31%, stable
-    # batch_size 4096 * 4 	best num batches ~ 22, best result -> 64.03%, stable
+    # best models:
+    # v9_r60_u30_l500000_s16384_b20_g0950_t4000_d0995_search1 -> 54tasks/100ticks, very good with large number of robots
 
     for var in variations:
         grid = base_params.copy()
