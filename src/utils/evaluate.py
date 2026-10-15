@@ -119,7 +119,7 @@ def run_evaluation(
             keys = map(int, data.keys())
             missing_num_robots = list(set(eval_robot_list) - set(keys))
         env_params = model_config.get_env_params()
-        env_params["step_limit"] = 50000
+        env_params["step_limit"] = 5000
         for num_robots in missing_num_robots:
             task_env_params = env_params.copy()
             task_env_params["max_robots"] = num_robots

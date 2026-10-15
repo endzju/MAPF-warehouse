@@ -186,6 +186,13 @@ def plot_delivery_throughput(
     x_ticks_set = {str(tick) for tick in x_ticks}
     data = read_models_data(model_configs=model_configs)
     plt.figure(figsize=(14, 6))
+
+    max_y = max(
+        eval_info["robot_throughput_per_100ticks"]
+        for evaluation in data.values()
+        for eval_info in evaluation.values()
+    )
+
     for i, (model_name, evaluation) in enumerate(data.items()):
         evaluation = {k: v for k, v in evaluation.items() if k in x_ticks_set}
         evaluation = dict(sorted(evaluation.items(), key=lambda item: int(item[0])))
@@ -195,22 +202,26 @@ def plot_delivery_throughput(
             for eval_info in evaluation.values()
         ]
 
+        cur_max_y = max(
+            [
+                eval_info["robot_throughput_per_100ticks"]
+                for eval_info in evaluation.values()
+            ]
+        )
+
+        cur_color = plot_colors[i % len(plot_colors)]
+        cur_linestyle = plot_lines[(i // len(plot_colors)) % len(plot_lines)]
+
         plt.plot(
             x,
             y,
             label=model_name,
-            color=plot_colors[i % len(plot_colors)],
-            linestyle=plot_lines[(i // len(plot_colors)) % len(plot_lines)],
+            color=cur_color,
+            linestyle=cur_linestyle,
             marker="o",
         )
-
-    max_y = max(
-        eval_info["robot_throughput_per_100ticks"]
-        for evaluation in data.values()
-        for eval_info in evaluation.values()
-    )
-
-    plt.axhline(y=max_y, linestyle="--")
+        if cur_max_y == max_y:
+            plt.axhline(y=max_y, linestyle=cur_linestyle, color=cur_color)
 
     plt.text(
         x=0.99,

@@ -25,7 +25,8 @@ def run_experiments(force_train: bool = True, eval: bool = True):
     _model_classes = [MLP, CNN]
     models_settings = []
     eval_robot_list = [n for n in range(10, 101, 5)]
-    train_workers = 3
+    train_workers = 1
+    eval_workers = 1
 
     base_params = {
         "grid_size": [(20, 20)],
@@ -37,9 +38,9 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
         ],
         "view_size": [9],
-        "buffer_length": [500_000],
+        "buffer_length": [400_000],
         "num_robots": [60],
-        "target_update_interval": [30],
+        "target_update_interval": [4],
         "suffix": ["sample1"],
         "batch_size": [4096 * 16],
         "num_batches": [30],
@@ -55,8 +56,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             ],
             "view_size": [9],
             "suffix": ["search1"],
-            "target_update_interval": [10, 15, 20, 25, 30, 35, 40],
-            "buffer_length": [500_000],
+            "target_update_interval": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
             "step_limit": [4000],
         },
         {
@@ -65,48 +65,61 @@ def run_experiments(force_train: bool = True, eval: bool = True):
                 {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
             ],
             "view_size": [9],
+            "suffix": ["search1"],
+            "buffer_length": [
+                300_000,
+                # 325_000,
+                350_000,
+                # 375_000,
+                400_000,
+                # 425_000,
+                450_000,
+                # 475_000,
+                500_000,
+                # 525_000,
+                550_000,
+                # 575_000,
+                600_000,
+            ],
+            "step_limit": [4000],
+        },
+        {
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
+            ],
+            "view_size": [9],
+            "num_batches": [15, 20, 25, 30, 35, 40],
+            "batch_size": [
+                4096 * 8,
+                4096 * 16,
+            ],
+            "suffix": ["search1"],
+            "step_limit": [4000],
+        },
+        {
+            "model_class": [CNN],
+            "hidden_layers": [
+                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
+                {"cnn_layers": [(5, 16, 0)], "mlp_layers": [128]},
+                {"cnn_layers": [(5, 16, 1)], "mlp_layers": [128]},
+                {"cnn_layers": [(5, 16, 2)], "mlp_layers": [128]},
+                {"cnn_layers": [(3, 16, 0), (3, 16, 0)], "mlp_layers": [128]},
+                {"cnn_layers": [(3, 16, 1), (3, 16, 1)], "mlp_layers": [128]},
+                {"cnn_layers": [(3, 16, 2), (3, 16, 2)], "mlp_layers": [128]},
+            ],
+            "view_size": [9, 11],
             "suffix": ["search1"],
             "buffer_length": [500_000],
             "step_limit": [4000],
-            "num_robots": [50, 55, 60, 65, 70],
         },
         {
             "model_class": [CNN],
             "hidden_layers": [
                 {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
             ],
-            "view_size": [9],
-            "num_batches": [20],
-            "batch_size": [4096 * 4],
+            "view_size": [7, 9, 11, 13],
             "suffix": ["search1"],
-            "buffer_length": [300_000, 400_000, 500_000, 600_000, 700_000, 800_000],
-            "step_limit": [4000],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
-            ],
-            "view_size": [9],
-            "num_batches": [5, 10, 15, 20, 25],
-            "batch_size": [4096 * 8, 4096 * 16, 4096 * 32, 4096 * 64],
-            "suffix": ["search1"],
-            "buffer_length": [500_000],
-            "step_limit": [4000],
-        },
-        {
-            "model_class": [CNN],
-            "hidden_layers": [
-                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [128]},
-                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
-                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [512]},
-                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [128, 64]},
-                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256, 128]},
-                {"cnn_layers": [(3, 16, 1)], "mlp_layers": [512, 256]},
-            ],
-            "view_size": [9],
-            "suffix": ["search1"],
-            "target_update_interval": [30],
             "buffer_length": [500_000],
             "step_limit": [4000],
         },
@@ -122,14 +135,15 @@ def run_experiments(force_train: bool = True, eval: bool = True):
 
     # best CNN params:
     # "cnn_layers": [(3, 16, 1)]        retrain with higher batch size
-    # "mlp_layers": [256]               retrain with higher batch size
-    # "target_update_interval": 30      retrain with higher batch size
-    # "num_robots": 60                  retrain with higher batch size
+    # "mlp_layers": [256]
+    # "target_update_interval": ~ 2 - 6    ?
+    # "num_robots": 60
     # best buffor length ~ 500_000      retrain with higher batch size
-    # batch_size >= 4096 * 16
+    # batch_size = 4096 * 16
 
     # best models:
     # v9_r60_u30_l500000_s16384_b20_g0950_t4000_d0995_search1 -> 54.5 tasks / 100 ticks, very good with large number of robots
+    # v9_r60_u30_l500000_s65536_b30_g0950_t4000_d0995_search1 -> 55.6 tasks / 100 ticks, very good with large number of robots
 
     for var in variations:
         grid = base_params.copy()
@@ -155,7 +169,7 @@ def run_experiments(force_train: bool = True, eval: bool = True):
             model_configs=model_configs,
             eval_robot_list=eval_robot_list,
             num_simulations=50,
-            num_processes=4,
+            num_processes=eval_workers,
         )
 
 
