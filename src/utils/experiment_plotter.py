@@ -31,13 +31,13 @@ if __name__ == "__main__":
         "hidden_layers": [
             {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
         ],
-        "view_size": [9],
+        "view_size": [11],
         "buffer_length": [500_000],
         "num_robots": [60],
-        "target_update_interval": [30],
+        "target_update_interval": [4],
         "suffix": ["sample1"],
         "batch_size": [4096 * 16],
-        "num_batches": [30],
+        "num_batches": [25],
         "num_episodes": [1200],
         "gamma": [0.95],
         "float_goal_vector": [True],
@@ -46,64 +46,52 @@ if __name__ == "__main__":
         # {
         #     "model_class": [CNN],
         #     "hidden_layers": [
+        #         {"cnn_layers": [(3, 16, 0)], "mlp_layers": [256]},
         #         {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
-        #     ],
-        #     "view_size": [9],
-        #     "suffix": ["search1"],
-        #     "target_update_interval": [2, 4, 6],
-        #     "buffer_length": [500_000],
-        #     "step_limit": [4000],
-        # },
-        # {
-        #     "model_class": [CNN],
-        #     "hidden_layers": [
-        #         {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
-        #     ],
-        #     "view_size": [9],
-        #     "suffix": ["search1"],
-        #     "buffer_length": [
-        #         300_000,
-        #         325_000,
-        #         350_000,
-        #         375_000,
-        #         400_000,
-        #         425_000,
-        #         450_000,
-        #         475_000,
-        #         500_000,
-        #         525_000,
-        #         550_000,
-        #         575_000,
-        #         600_000,
-        #     ],
-        #     "step_limit": [4000],
-        # },
-        # {
-        #     "model_class": [CNN],
-        #     "hidden_layers": [
-        #         {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
-        #     ],
-        #     "view_size": [9],
-        #     "num_batches": [15, 20, 25, 30, 35, 40],
-        #     "batch_size": [
-        #         4096 * 8,
-        #         4096 * 16,
+        #         {"cnn_layers": [(3, 16, 0)], "mlp_layers": [512]},
+        #         {"cnn_layers": [(3, 16, 1)], "mlp_layers": [512]},
+        #         {"cnn_layers": [(5, 16, 0)], "mlp_layers": [256]},
+        #         {"cnn_layers": [(5, 16, 1)], "mlp_layers": [256]},
+        #         {"cnn_layers": [(5, 16, 0)], "mlp_layers": [512]},
+        #         {"cnn_layers": [(5, 16, 1)], "mlp_layers": [512]},
         #     ],
         #     "suffix": ["search1"],
-        #     "buffer_length": [500_000],
         #     "step_limit": [4000],
         # },
+        # CNN_k3c16p1MLP_256_v9_r60_u4_l500000_s65536_b30_g0950_t4000_d0995
         {
             "model_class": [CNN],
             "hidden_layers": [
                 {"cnn_layers": [(3, 16, 1)], "mlp_layers": [256]},
             ],
-            "view_size": [7, 9, 11, 13],
-            "suffix": ["search1"],
+            "view_size": [9],
             "buffer_length": [500_000],
+            "num_robots": [60],
+            "target_update_interval": [4],
+            "batch_size": [65_536],
+            "num_batches": [30],
+            "gamma": [0.95],
             "step_limit": [4000],
+            "suffix": [""],
+        },
+        # MLP_512_v7_r60_u30_l500000_s32768_b10_g0990_t3000_d0995
+        {
+            "model_class": [MLP],
+            "hidden_layers": [
+                {"mlp_layers": [512]},
+            ],
+            "view_size": [7],
+            "buffer_length": [500_000],
+            "num_robots": [60],
+            "target_update_interval": [30],
+            "batch_size": [32_768],
+            "num_batches": [10],
+            "gamma": [0.99],
+            "step_limit": [3000],
+            "suffix": [""],
         },
     ]
+
     for var in variations:
         grid = base_params.copy()
         grid.update(var)

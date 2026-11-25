@@ -168,7 +168,7 @@ def plot_delivery_efficiency(
     plt.title("Movement Efficiency")
     plt.ylim(bottom=100)
     plt.grid(True)
-    plt.legend()
+    # plt.legend()
     plt.tight_layout()
     results_path = (
         Path(__file__).parent.parent / "neural_networks" / "plots" / "results"
@@ -185,7 +185,7 @@ def plot_delivery_throughput(
 ):
     x_ticks_set = {str(tick) for tick in x_ticks}
     data = read_models_data(model_configs=model_configs)
-    plt.figure(figsize=(14, 6))
+    plt.figure(figsize=(10, 6))
 
     max_y = max(
         eval_info["robot_throughput_per_100ticks"]
@@ -236,10 +236,7 @@ def plot_delivery_throughput(
     plt.ylabel("Avg Robot throughput per 100 ticks")
     plt.title("Average Robot Throughput")
     plt.grid(True)
-    plt.legend(
-        loc="upper left",
-        bbox_to_anchor=(1.02, 1),
-    )
+    # plt.legend()
     plt.tight_layout()
     results_path = (
         Path(__file__).parent.parent / "neural_networks" / "plots" / "results"
@@ -247,6 +244,14 @@ def plot_delivery_throughput(
     results_path.mkdir(parents=True, exist_ok=True)
     path = results_path / "delivery_throughput.png"
     plt.savefig(str(path), dpi=300, bbox_inches="tight")
+
+    handles, labels = plt.gca().get_legend_handles_labels()
+    fig_legend = plt.figure(figsize=(1, 1))
+    fig_legend.legend(handles, labels, loc="center")
+    plt.axis("off")
+    legend_path = results_path / "delivery_throughput_legend.png"
+    fig_legend.savefig(str(legend_path), dpi=300, bbox_inches="tight")
+
     plt.close()
 
 

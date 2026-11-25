@@ -101,6 +101,8 @@ class DeliveryRobot:
         self.allow_next_observation = True
 
     def is_stuck(self) -> bool:
+        if self.busy_time > 0:
+            return False
         if self.stuck_time == 0:
             return False
         if len(self.stuck_pos_history) < self.stuck_time:

@@ -126,8 +126,9 @@ class ModelConfig:
             obs_parts.append(self.suffix)
 
         # Jeśli nie dodano żadnych specyficznych modyfikatorów, oznaczamy jako "default"
-        obs_name = "_".join(obs_parts) if obs_parts else "default"
-        parts.append(obs_name)
+        if obs_parts:
+            obs_name = "_".join(obs_parts)
+            parts.append(obs_name)
 
         return "_".join(parts)
 

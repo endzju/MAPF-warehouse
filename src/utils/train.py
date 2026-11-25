@@ -221,21 +221,23 @@ def train(
 
             memory_push_tic = time.time()
             for agent_id in obs:
-                if agent_id in next_obs:
-                    memory.push(
-                        obs[agent_id],
-                        actions[agent_id],
-                        rewards[agent_id],
-                        next_obs[agent_id],
-                        done,
-                    )
-                elif agent_id in additional_info["tasks_done"]:
+                if agent_id in additional_info["blocked_agents"]:
+                    continue
+                if agent_id in additional_info["tasks_done"]:
                     memory.push(
                         obs[agent_id],
                         actions[agent_id],
                         rewards[agent_id],
                         env._get_obs(dummy=True),
                         True,
+                    )
+                elif agent_id in next_obs:
+                    memory.push(
+                        obs[agent_id],
+                        actions[agent_id],
+                        rewards[agent_id],
+                        next_obs[agent_id],
+                        done,
                     )
             memory_push_time += time.time() - memory_push_tic
             obs = next_obs

@@ -81,6 +81,7 @@ class MultiRobotGridEnv(gym.Env):
         self.stuck_time = stuck_time
         self.depot_priority = 0
         self.cached_agents = []
+        self.radius_from_depot = 2
 
         if obstacles:
             obs = np.array(list[tuple[int, int]](obstacles), dtype=np.intp)
@@ -188,6 +189,12 @@ class MultiRobotGridEnv(gym.Env):
                 self.input_depots
             )
 
+    def _is_close_to_output_depots(self, pos: tuple[int, int]):
+        for depot in self.output_depots:
+            if manhattan_distance(depot.pos, pos) <= self.radius_from_depot:
+                return True
+        return False
+
     def _calc_grid_caches(self):
         """
         Rebuild everything derived from the grid size, the obstacles and the view
@@ -219,18 +226,14 @@ class MultiRobotGridEnv(gym.Env):
             dtype=np.uint8,
         )
 
-    def get_empty_cells(
-        self, include_depot: bool = False, radius_from_depot: int = 0
-    ) -> set[tuple[int, int]]:
+    def get_empty_cells(self) -> set[tuple[int, int]]:
         occupied_cells = set(self._obstacle_cells_cache)
-        for agent in self.agents:
-            occupied_cells.update(agent.get_occupied_cells())
-        if include_depot:
-            occupied_cells.update(self._depot_positions())
-        if radius_from_depot:
+        if self.radius_from_depot:
             for depot_pos in self._depot_positions():
-                for dx in range(-radius_from_depot, radius_from_depot + 1):
-                    for dy in range(-radius_from_depot, radius_from_depot + 1):
+                for dx in range(-self.radius_from_depot, self.radius_from_depot + 1):
+                    for dy in range(
+                        -self.radius_from_depot, self.radius_from_depot + 1
+                    ):
                         occupied_cells.add((depot_pos[0] + dx, depot_pos[1] + dy))
 
         return self._all_cells - occupied_cells
@@ -256,9 +259,7 @@ class MultiRobotGridEnv(gym.Env):
         self._calc_grid_caches()
         self.agents = set()
         self.available_ids = deque(range(self.max_robots))
-        empty_cells = list(
-            self.get_empty_cells(include_depot=False, radius_from_depot=2)
-        )
+        empty_cells = list(self.get_empty_cells())
         self._reset_depot_max_robots()
         for depot in self.input_depots:
             depot._clear_tasks()
@@ -334,10 +335,7 @@ class MultiRobotGridEnv(gym.Env):
         if next_pos == agent.pos:
             return reward
         x, y = next_pos
-        if (
-            not (0 <= x < self.grid_width and 0 <= y < self.grid_height)
-            or next_pos in blocked_cells
-        ):
+        if not self._is_inside_grid((x, y)) or next_pos in blocked_cells:
             return -20
         if next_pos == agent.goal_pos:
             return 100
@@ -371,9 +369,14 @@ class MultiRobotGridEnv(gym.Env):
     def _is_inside_grid(self, pos: tuple[int, int]) -> bool:
         return 0 <= pos[0] < self.grid_width and 0 <= pos[1] < self.grid_height
 
-    def _step_agents(self, actions, previous_blocked) -> dict[int, float]:
+    def _step_agents(
+        self, actions, previous_blocked
+    ) -> tuple[dict[int, float], dict[set]]:
         rewards = {}
-        additional_info = {"tasks_done": {}}
+        additional_info = {
+            "tasks_done": set(),
+            "blocked_agents": set(),
+        }
 
         blocked = set(previous_blocked)
 
@@ -383,26 +386,34 @@ class MultiRobotGridEnv(gym.Env):
         for agent in agent_list:
             if agent.is_busy():
                 continue
-            action = actions.get(agent.id, 4)  # 4 -> default is wait
+            if agent.id not in actions:
+                print("DEBUG: agein_id not in actions")
 
             if agent.is_stuck():
-                rewards[agent.id] = 0
                 random_move = random.randrange(self.n_actions)
-                next_pos = self._next_pos(agent, random_move)
-                if self._is_inside_grid(next_pos) and next_pos not in blocked:
-                    agent.set_next_pos(next_pos)
-                    blocked.add(next_pos)
-                continue
+                actions[agent.id] = random_move
 
+            action = actions.get(agent.id, 4)  # 4 -> default is wait
             next_pos = self._next_pos(agent, action)
-            if self._is_inside_grid(next_pos) and next_pos not in blocked:
+
+            if next_pos not in blocked:
                 rewards[agent.id] = self.reward(agent, next_pos, blocked)
-                agent.set_next_pos(next_pos)
                 blocked.add(next_pos)
+                if not self._is_inside_grid(next_pos):
+                    continue
+                if (
+                    agent.task_type != TaskType.LEAVE
+                    and self._is_close_to_output_depots(next_pos)
+                ):
+                    continue
+                agent.set_next_pos(next_pos)
             else:
+                additional_info["blocked_agents"].add(agent.id)
                 rewards[agent.id] = self.reward(agent, next_pos, previous_blocked)
+
         for agent in agent_list:
-            additional_info["tasks_done"][agent.id] = agent.step()
+            if agent.step():
+                additional_info["tasks_done"].add(agent.id)
 
         return rewards, additional_info
 

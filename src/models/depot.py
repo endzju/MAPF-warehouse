@@ -4,8 +4,6 @@ from src.models.task import Task
 class Depot:
     def __init__(self, pos: tuple[int, int] = (0, 0)):
         self.pos = pos
-        # self.stored_agents = []
-        # self.task_history = []
         self.tasks = []
         self.finished_tasks = []
         self.stored_robots = 1
